@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.local
+.wrangler
+playwright-report
+test-results
+tests/e2e/.state.json
+dist-e2e
+*.tsbuildinfo
+sauvegardes/
