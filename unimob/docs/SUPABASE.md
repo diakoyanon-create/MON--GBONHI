@@ -12,7 +12,10 @@ Aucune dépense n’est nécessaire avec l’offre gratuite ; vérifiez les quot
 
 ## 2. Appliquer les migrations
 
-Option A — éditeur SQL (simple) : *SQL Editor → New query*, collez puis exécutez **dans l’ordre** chaque fichier de
+Option A0 — le plus simple : *SQL Editor → New query*, collez tout le fichier `supabase/installation_complete.sql`
+(les 6 migrations réunies, sans données de démonstration) puis *Run*. Une seule fois, sur un projet vierge.
+
+Option A — éditeur SQL, fichier par fichier : *SQL Editor → New query*, collez puis exécutez **dans l’ordre** chaque fichier de
 `supabase/migrations/` :
 
 1. `20261009000100_fondations.sql`
