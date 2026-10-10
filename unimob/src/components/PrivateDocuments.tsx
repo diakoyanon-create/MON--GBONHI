@@ -3,7 +3,8 @@ import { listRows, logEvent } from '@/api/crud';
 import { useQuery } from '@/api/hooks';
 import { storagePath, validateFile } from '@/domain/files';
 import { formatDateTime } from '@/lib/format';
-import { signedUrl } from '@/lib/photos';
+import { openPrivateFile, PRIVATE_UPLOAD_OPTIONS } from '@/lib/photos';
+import { useAuth } from '@/auth/AuthContext';
 import { DOCS_BUCKET, supabase } from '@/lib/supabase';
 import { ErrorBox, Section, Spinner, humanError } from './ui';
 
@@ -11,6 +12,7 @@ const DOC_TYPES = ['Titre foncier', 'ACD', 'Attestation villageoise', 'Plan', 'P
 
 /** Documents confidentiels (bucket privé, accès par lien signé de 5 minutes). */
 export function PrivateDocuments({ propertyId, ownerId }: { propertyId?: string; ownerId?: string }) {
+  const { can } = useAuth();
   const [title, setTitle] = useState('');
   const [docType, setDocType] = useState(DOC_TYPES[0]);
   const [file, setFile] = useState<File | null>(null);
@@ -27,7 +29,7 @@ export function PrivateDocuments({ propertyId, ownerId }: { propertyId?: string;
     setError(null);
     const path = storagePath(propertyId ? `biens/${propertyId}` : `proprietaires/${ownerId}`, file.type);
     try {
-      const { error: e1 } = await supabase.storage.from(DOCS_BUCKET).upload(path, file, { contentType: file.type });
+      const { error: e1 } = await supabase.storage.from(DOCS_BUCKET).upload(path, file, { contentType: file.type, ...PRIVATE_UPLOAD_OPTIONS });
       if (e1) throw e1;
       const { error: e2 } = await supabase.from('property_documents').insert({
         property_id: propertyId ?? null, owner_id: ownerId ?? null, title: title.trim() || docType, doc_type: docType,
@@ -48,10 +50,25 @@ export function PrivateDocuments({ propertyId, ownerId }: { propertyId?: string;
   }
 
   async function open(doc: { id: string; storage_path: string; title: string }) {
+    setError(null);
     try {
-      const url = await signedUrl(DOCS_BUCKET, doc.storage_path);
       await logEvent('consultation_document', 'property_documents', doc.title, doc.id);
-      window.open(url, '_blank', 'noopener');
+      await openPrivateFile(DOCS_BUCKET, doc.storage_path);
+    } catch (e) {
+      setError(humanError(e));
+    }
+  }
+
+  /** Suppression (administrateur) : la ligne puis le fichier. Tracée par la base. */
+  async function remove(doc: { id: string; storage_path: string; title: string }) {
+    if (!window.confirm(`Supprimer définitivement « ${doc.title} » ?`)) return;
+    setError(null);
+    try {
+      const { error: e1 } = await supabase.from('property_documents').delete().eq('id', doc.id);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.storage.from(DOCS_BUCKET).remove([doc.storage_path]);
+      if (e2) throw e2;
+      reload();
     } catch (e) {
       setError(humanError(e));
     }
@@ -70,7 +87,10 @@ export function PrivateDocuments({ propertyId, ownerId }: { propertyId?: string;
                 <div className="truncate font-medium">{d.title}</div>
                 <div className="text-xs text-ink-500">{d.doc_type} · {formatDateTime(d.created_at)}</div>
               </div>
-              <button className="btn-outline btn-sm" onClick={() => void open(d as never)}>Ouvrir</button>
+              <span className="flex gap-1">
+                <button className="btn-outline btn-sm" onClick={() => void open(d as never)}>Ouvrir</button>
+                {can.admin && <button className="btn-ghost btn-sm text-red-700" onClick={() => void remove(d as never)}>Supprimer</button>}
+              </span>
             </li>
           ))}
         </ul>
@@ -79,7 +99,7 @@ export function PrivateDocuments({ propertyId, ownerId }: { propertyId?: string;
         <select className="input" aria-label="Type de document" value={docType} onChange={(e) => setDocType(e.target.value)}>
           {DOC_TYPES.map((t) => <option key={t}>{t}</option>)}
         </select>
-        <input className="input" placeholder="Intitulé (facultatif)" aria-label="Intitulé" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input className="input" placeholder="Intitulé (facultatif)" aria-label="Intitulé" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
         <input className="input" type="file" aria-label="Fichier" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </div>
       <ErrorBox error={error} />

@@ -1,5 +1,5 @@
 import type { Row } from '@/api/crud';
-import { listRows, rpc } from '@/api/crud';
+import { listAllRows, listRows, rpc } from '@/api/crud';
 import {
   AREA_UNITS, BUYER_STATUS, CHANNELS, CONTACT_PREF, MANDATE_STATUS, MANDATE_TYPES, OFFER_STATUS, PAYMENT_METHODS, PROPERTY_STATUS,
   PROPERTY_TYPES, REVENUE_STATUS, REVENUE_TYPES, TASK_PRIORITY, TASK_STATUS, TRANSACTION_STATUS, VERIFICATION_STATUS, VISIT_STATUS, label,
@@ -60,7 +60,7 @@ export async function buyerSheetPdf(agency: PdfAgency, bu: Row) {
   b.heading(fullName(bu));
   b.keyValues([
     ['Téléphone / courriel', [bu.phone, bu.email].filter(Boolean).join(' / ')],
-    ['Budget', `${formatXOF(bu.budget_min)} → ${formatXOF(bu.budget_max)}`],
+    ['Budget', `de ${formatXOF(bu.budget_min)} à ${formatXOF(bu.budget_max)}`],
     ['Zones', (bu.zones ?? []).join(', ') || '—'],
     ['Types de biens', (bu.property_types ?? []).map((t: string) => label(PROPERTY_TYPES, t)).join(', ') || '—'],
     ['Délai du projet', bu.project_timeline ?? '—'],
@@ -124,7 +124,7 @@ export async function transactionSheetPdf(agency: PdfAgency, t: Row, offers: Row
 }
 
 export async function commissionStatementPdf(agency: PdfAgency) {
-  const { rows } = await listRows('transaction_commissions', { order: { column: 'reference' }, pageSize: 1000 });
+  const rows = await listAllRows('transaction_commissions', { order: { column: 'reference', ascending: true } });
   const b = await buildPdf(agency, 'Relevé des commissions', `RELEVE-${todayISO()}`, true);
   b.table(
     ['Dossier', 'Statut', 'Base', 'Estimée', 'Convenue', 'Exigible', 'Encaissée', 'Solde'],
@@ -138,7 +138,7 @@ export async function financialReportPdf(agency: PdfAgency, from: string, to: st
   const r = await rpc<Row>('finance_report', { p_from: from, p_to: to });
   const b = await buildPdf(agency, 'Rapport financier', `FIN-${from}-${to}`, true);
   b.keyValues([
-    ['Période', `${formatDate(from)} → ${formatDate(to)}`],
+    ['Période', `du ${formatDate(from)} au ${formatDate(to)}`],
     ['Recettes attendues', formatXOF(r.revenues_expected)],
     ['Recettes encaissées', formatXOF(r.revenues_received)],
     ['Commissions dues (solde)', formatXOF(r.commissions_due)],
@@ -150,8 +150,8 @@ export async function financialReportPdf(agency: PdfAgency, from: string, to: st
   b.table(['Type', 'Attendu', 'Encaissé', 'Solde'], (r.revenues_by_type as Row[]).map((x) => [label(REVENUE_TYPES, x.entry_type), formatXOF(x.expected), formatXOF(x.received), formatXOF(x.balance)]));
   b.heading('Dépenses par catégorie');
   b.table(['Catégorie', 'Nombre', 'Total'], (r.expenses_by_category as Row[]).map((x) => [x.category, String(x.count), formatXOF(x.total)]));
-  b.paragraph('Les montants attendus ne sont pas des montants encaissés. Résultat simplifié (encaissements − dépenses), non comptable.');
-  await finishPdf(b, agency, { docType: 'rapport_financier', title: `Rapport financier ${from} → ${to}`, filename: `rapport-financier-${from}-${to}.pdf`, personal: false });
+  b.paragraph('Les montants attendus ne sont pas des montants encaissés. Résultat simplifié (encaissements - dépenses), non comptable.');
+  await finishPdf(b, agency, { docType: 'rapport_financier', title: `Rapport financier du ${from} au ${to}`, filename: `rapport-financier-${from}-${to}.pdf`, personal: false });
 }
 
 export async function revenueStatementPdf(agency: PdfAgency, e: Row, payments: Row[]) {
@@ -171,14 +171,14 @@ export async function revenueStatementPdf(agency: PdfAgency, e: Row, payments: R
 }
 
 export async function inventoryPdf(agency: PdfAgency) {
-  const { rows } = await listRows('properties', { select: 'reference, title, property_type, city, district, price_xof, commercial_status, verification_status', notIn: { commercial_status: ['archive'] }, order: { column: 'reference', ascending: true }, pageSize: 2000 });
+  const rows = await listAllRows('properties', { select: 'reference, title, property_type, city, district, price_xof, commercial_status, verification_status', notIn: { commercial_status: ['archive'] }, order: { column: 'reference', ascending: true } });
   const b = await buildPdf(agency, 'Inventaire des biens', `INV-${todayISO()}`, false);
   b.table(['Réf.', 'Titre', 'Type', 'Localisation', 'Prix', 'Statut', 'Vérif.'], rows.map((r) => [r.reference, r.title, label(PROPERTY_TYPES, r.property_type), [r.district, r.city].filter(Boolean).join(', '), formatXOF(r.price_xof), label(PROPERTY_STATUS, r.commercial_status), label(VERIFICATION_STATUS, r.verification_status)]));
   await finishPdf(b, agency, { docType: 'inventaire', title: `Inventaire ${todayISO()}`, filename: `inventaire-${todayISO()}.pdf`, personal: false });
 }
 
 export async function tasksPdf(agency: PdfAgency) {
-  const { rows } = await listRows('tasks', { inList: { status: ['a_faire', 'en_cours', 'reportee'] }, order: { column: 'due_at', ascending: true }, pageSize: 1000 });
+  const rows = await listAllRows('tasks', { inList: { status: ['a_faire', 'en_cours', 'reportee'] }, order: { column: 'due_at', ascending: true } });
   const b = await buildPdf(agency, 'Liste des tâches ouvertes', `TACHES-${todayISO()}`, false);
   b.table(['Échéance', 'Tâche', 'Catégorie', 'Priorité', 'Statut'], rows.map((r) => [formatDateTime(r.due_at), r.title, r.category ?? '', label(TASK_PRIORITY, r.priority), label(TASK_STATUS, r.status)]));
   await finishPdf(b, agency, { docType: 'liste_taches', title: `Tâches ${todayISO()}`, filename: `taches-${todayISO()}.pdf`, personal: false });
@@ -187,7 +187,7 @@ export async function tasksPdf(agency: PdfAgency) {
 export async function activityReportPdf(agency: PdfAgency, from: string, to: string, stats: Row) {
   const b = await buildPdf(agency, 'Rapport d’activité', `ACT-${from}-${to}`, false);
   b.keyValues([
-    ['Période', `${formatDate(from)} → ${formatDate(to)}`],
+    ['Période', `du ${formatDate(from)} au ${formatDate(to)}`],
     ['Biens référencés', String(stats.properties.total)],
     ['Biens en ligne', String(stats.properties.publies)],
     ['En négociation', String(stats.properties.en_negociation)],
@@ -199,7 +199,7 @@ export async function activityReportPdf(agency: PdfAgency, from: string, to: str
     ['Ventes conclues (période)', stats.sales ? `${stats.sales.count} — ${formatXOF(stats.sales.volume)}` : '—'],
     ['Tâches en retard', String(stats.tasks_overdue)],
   ]);
-  await finishPdf(b, agency, { docType: 'rapport_activite', title: `Activité ${from} → ${to}`, filename: `rapport-activite-${from}-${to}.pdf`, personal: false });
+  await finishPdf(b, agency, { docType: 'rapport_activite', title: `Activité du ${from} au ${to}`, filename: `rapport-activite-${from}-${to}.pdf`, personal: false });
 }
 
 /** Modèle de mandat : brouillon à faire valider, jamais présenté comme juridiquement valide. */

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
-import { ErrorBox, SuccessBox } from '@/components/ui';
+import { ErrorBox, Spinner, SuccessBox } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useSeo } from '@/lib/seo';
 
@@ -84,7 +84,7 @@ export function ForgotPasswordPage() {
 
 export function UpdatePasswordPage() {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, loading } = useAuth();
   const [pwd, setPwd] = useState('');
   const [pwd2, setPwd2] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +98,10 @@ export function UpdatePasswordPage() {
     else navigate('/admin', { replace: true });
   }
   return (
-    <AuthCard title="Choisir un nouveau mot de passe">
-      {!session ? (
+    <AuthCard title="Choisir votre mot de passe">
+      {loading ? (
+        <Spinner label="Vérification du lien…" />
+      ) : !session ? (
         <ErrorBox error="Lien invalide ou expiré. Recommencez la procédure de réinitialisation." />
       ) : (
         <form onSubmit={submit} className="space-y-4">

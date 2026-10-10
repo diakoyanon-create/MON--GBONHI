@@ -5,6 +5,7 @@ import { useQuery } from '@/api/hooks';
 import { useAuth } from '@/auth/AuthContext';
 import { ErrorBox, PageHeader, Spinner, humanError } from '@/components/ui';
 import { ResourceForm } from './ResourceForm';
+import { AttachmentField } from '@/components/AttachmentField';
 import type { ResourceConfig } from './types';
 import type { FormValues } from './values';
 import type { ReactNode } from 'react';
@@ -16,7 +17,7 @@ export function ResourceFormPage({ config, aside }: { config: ResourceConfig; as
   const navigate = useNavigate();
   const { can } = useAuth();
   const [delError, setDelError] = useState<string | null>(null);
-  const { data: row, error, loading } = useQuery(() => (id ? getRow(config.table, id) : Promise.resolve(null)), [id, config.table]);
+  const { data: row, error, loading, reload } = useQuery(() => (id ? getRow(config.table, id) : Promise.resolve(null)), [id, config.table]);
 
   // Préremplissage depuis l'URL (?property_id=…&buyer_id=…) pour enchaîner les actions.
   const prefill: Record<string, unknown> = { ...(typeof config.defaults === 'function' ? config.defaults() : config.defaults ?? {}) };
@@ -35,7 +36,7 @@ export function ResourceFormPage({ config, aside }: { config: ResourceConfig; as
   if (!can[id ? config.canEdit : config.canCreate]) {
     return <ErrorBox error="Votre rôle ne permet pas cette action." />;
   }
-  if (id && loading) return <Spinner />;
+  if (id && loading && !row) return <Spinner />;
   if (id && (error || !row)) return <ErrorBox error={error ?? 'Élément introuvable ou accès refusé.'} />;
 
   return (
@@ -57,7 +58,19 @@ export function ResourceFormPage({ config, aside }: { config: ResourceConfig; as
           aside={aside}
         />
       </div>
-      {id && can.admin && (
+      {id && row && config.attachment && (
+        <div className="mt-5">
+          <AttachmentField
+            table={config.table}
+            id={id}
+            {...config.attachment}
+            currentPath={row[config.attachment.column] ?? null}
+            editable={can[config.canEdit]}
+            onSaved={reload}
+          />
+        </div>
+      )}
+      {id && can.admin && config.canDelete !== false && (
         <div className="mt-6 rounded-xl border border-red-200 p-4">
           <h2 className="text-sm font-semibold text-red-800">Zone sensible</h2>
           <p className="mt-1 text-xs text-ink-500">

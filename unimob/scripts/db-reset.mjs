@@ -9,15 +9,16 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const adminUrl = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/postgres';
 const dbName = process.env.TEST_DB_NAME ?? 'unimob_test';
 
-export async function resetDatabase({ seed = true } = {}) {
+export async function resetDatabase({ seed = true, strictGrants = false, name = dbName } = {}) {
+  const dbName_ = name;
   const admin = new pg.Client({ connectionString: adminUrl });
   await admin.connect();
-  await admin.query(`drop database if exists ${dbName} with (force)`);
-  await admin.query(`create database ${dbName}`);
+  await admin.query(`drop database if exists ${dbName_} with (force)`);
+  await admin.query(`create database ${dbName_}`);
   await admin.end();
 
   const url = new URL(adminUrl);
-  url.pathname = `/${dbName}`;
+  url.pathname = `/${dbName_}`;
   const client = new pg.Client({ connectionString: url.toString() });
   await client.connect();
   try {
@@ -28,7 +29,17 @@ export async function resetDatabase({ seed = true } = {}) {
         throw new Error(`${file}: ${e.message}`);
       }
     };
-    await run(join(root, 'tests/db/supabase-shim.sql'));
+    let shim = readFileSync(join(root, 'tests/db/supabase-shim.sql'), 'utf8');
+    // Mode « projet Supabase récent » : aucun privilège accordé par défaut sur les nouveaux objets.
+    if (strictGrants) {
+      shim = shim.replace(/^alter default privileges.*$/gm, '') +
+        '\nalter default privileges in schema public revoke execute on functions from public;\n';
+    }
+    try {
+      await client.query(shim);
+    } catch (e) {
+      throw new Error(`supabase-shim.sql: ${e.message}`);
+    }
     const migDir = join(root, 'supabase/migrations');
     for (const f of readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort()) {
       await run(join(migDir, f));

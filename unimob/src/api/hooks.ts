@@ -47,9 +47,19 @@ const FALLBACK: AgencySettings = {
 let publicCache: Promise<AgencySettings> | null = null;
 /** Informations publiques de l'agence (vue public_agency_info). */
 export function fetchPublicAgency(): Promise<AgencySettings> {
+  // En cas d'échec (réseau), on ne garde pas le repli en cache : le prochain appel réessaie.
   publicCache ??= Promise.resolve(supabase.from('public_agency_info').select('*').maybeSingle()).then(
-    ({ data }) => ({ ...FALLBACK, ...(data ?? {}) }) as AgencySettings,
-    () => FALLBACK,
+    ({ data, error }) => {
+      if (error) {
+        publicCache = null;
+        return FALLBACK;
+      }
+      return { ...FALLBACK, ...(data ?? {}) } as AgencySettings;
+    },
+    () => {
+      publicCache = null;
+      return FALLBACK;
+    },
   );
   return publicCache;
 }

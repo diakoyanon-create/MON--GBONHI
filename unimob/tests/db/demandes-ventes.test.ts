@@ -31,7 +31,9 @@ describe('Demandes publiques', () => {
     expect(rows[0].status).toBe('nouveau');
     expect(rows[0].property_id).toBe(propertyId);
     expect(rows[0].consent).toBe(true);
-    expect(rows[0].client_fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(Object.keys(rows[0])).not.toContain('client_fingerprint');
+    const [t] = await sql(`select fingerprint from private.inquiry_throttle order by id desc limit 1`);
+    expect(t.fingerprint).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('une référence de bien non publié n’est pas rattachée', async () => {

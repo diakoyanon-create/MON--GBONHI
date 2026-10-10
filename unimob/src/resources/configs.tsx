@@ -30,7 +30,7 @@ const ref = (r: Row) => <span className="font-mono text-xs">{r.reference}</span>
 export const propertyFields: FieldDef[] = [
   { name: 'title', label: 'Titre de l’annonce', type: 'text', required: true, maxLength: 160, full: true },
   { name: 'property_type', label: 'Type de bien', type: 'select', required: true, options: options.propertyTypes },
-  { name: 'reference', label: 'Référence', type: 'text', maxLength: 40, help: 'Laisser vide pour une référence automatique (BIEN-AAAA-00001).' },
+  { name: 'reference', label: 'Référence', type: 'text', maxLength: 40, help: 'Laisser vide pour une référence automatique (BIEN-AAAA-NNNNN, format réservé). Modifiable ensuite par l’administrateur uniquement.' },
   { name: 'price_xof', label: 'Prix (FCFA)', type: 'money', min: 0 },
   { name: 'negotiable', label: 'Prix négociable', type: 'boolean' },
   { name: 'region', label: 'Région', type: 'text' },
@@ -50,7 +50,7 @@ export const propertyFields: FieldDef[] = [
   { name: 'listing_origin', label: 'Origine du référencement', type: 'select', settingsOptions: 'contact_sources' },
   { name: 'verification_status', label: 'Statut de vérification', type: 'select', required: true, options: options.verification, help: 'Distinct du statut commercial. « Vérifié » uniquement après contrôle réel des documents.' },
   { name: 'commercial_status', label: 'Statut commercial', type: 'select', required: true, options: options.propertyStatus, help: 'La publication est refusée tant que les conditions configurées ne sont pas remplies. Une vente conclue dans les transactions passe le bien en « Vendu ».' },
-  { name: 'unavailability_reason', label: 'Motif d’indisponibilité', type: 'text', showIf: (v) => ['retire', 'archive', 'reserve'].includes(String(v.commercial_status)), full: true },
+  { name: 'unavailability_reason', label: 'Motif d’indisponibilité', type: 'text', showIf: (v) => ['retire', 'archive', 'reserve', 'vendu'].includes(String(v.commercial_status)), full: true },
   { name: 'is_featured', label: 'Mettre en avant sur l’accueil', type: 'boolean' },
   { name: 'is_demo', label: 'Bien de démonstration (fictif)', type: 'boolean', help: 'Affiché comme fictif sur le site public.' },
 ];
@@ -71,6 +71,7 @@ export const propertiesConfig: ResourceConfig = {
     { name: 'verification_status', label: 'Vérification', options: options.verification },
   ],
   hiddenStatuses: { column: 'commercial_status', values: ['archive'], label: 'Afficher les archivés' },
+  rangeFilters: [{ name: 'price_xof', label: 'Prix (FCFA)' }],
   fields: propertyFields,
   defaults: { area_unit: 'm2', negotiable: true, verification_status: 'a_verifier', commercial_status: 'brouillon' },
   columns: [
@@ -115,6 +116,7 @@ export const ownersConfig: ResourceConfig = {
   search: ['reference', 'last_name', 'first_names', 'phone_primary', 'email'],
   searchPlaceholder: 'Nom, téléphone, référence…',
   filters: [{ name: 'verification_status', label: 'Vérification', options: options.verification }],
+  archivedColumn: 'archived_at',
   fields: ownerFields,
   defaults: { contact_preference: 'telephone', verification_status: 'a_verifier' },
   columns: [
@@ -141,7 +143,7 @@ export const buyerFields: FieldDef[] = [
   { name: 'budget_max', label: 'Budget maximal (FCFA)', type: 'money', min: 0 },
   { name: 'zones', label: 'Zones recherchées', type: 'tags', settingsOptions: 'zones_served', full: true },
   { name: 'property_types', label: 'Types de biens', type: 'multiselect', options: options.propertyTypes },
-  { name: 'area_min', label: 'Superficie minimale', type: 'number', min: 0 },
+  { name: 'area_min', label: 'Superficie minimale (m²)', type: 'number', min: 0 },
   { name: 'bedrooms_min', label: 'Chambres minimum', type: 'number', min: 0 },
   { name: 'project_timeline', label: 'Délai du projet', type: 'text', placeholder: 'Ex. sous 3 mois' },
   { name: 'source', label: 'Source', type: 'select', settingsOptions: 'contact_sources' },
@@ -166,6 +168,8 @@ export const buyersConfig: ResourceConfig = {
   searchPlaceholder: 'Nom, téléphone, courriel…',
   filters: [{ name: 'status', label: 'Statut', options: options.buyerStatus }],
   hiddenStatuses: { column: 'status', values: ['archive', 'sans_suite'], label: 'Afficher archivés / sans suite' },
+  coverFilter: { param: 'budget', label: 'Budget compatible avec (FCFA)', minCol: 'budget_min', maxCol: 'budget_max' },
+  containsFilter: { name: 'zones', label: 'Zone recherchée', settingsOptions: 'zones_served' },
   fields: buyerFields,
   defaults: { contact_preference: 'telephone', status: 'nouveau' },
   columns: [
@@ -214,6 +218,7 @@ export const mandatesConfig: ResourceConfig = {
   fields: mandateFields,
   defaults: { mandate_type: 'simple', status: 'brouillon' },
   notice: 'Les durées, conditions et commissions sont configurables et ne constituent pas des obligations légales. Les modèles de mandat doivent être validés par un professionnel compétent avant utilisation.',
+  attachment: { bucket: 'private-documents', column: 'signed_document_path', label: 'Mandat signé (PDF ou photo)', folder: 'mandats' },
   columns: [
     { key: 'reference', label: 'Référence', render: ref },
     { key: 'property', label: 'Bien', render: (r) => r.property ? `${r.property.reference} — ${r.property.title}` : '—' },
@@ -238,7 +243,7 @@ export const inquiryFields: FieldDef[] = [
   { name: 'message', label: 'Message / besoin', type: 'textarea', required: true, maxLength: 2000 },
   { name: 'contact_preference', label: 'Préférence de contact', type: 'select', required: true, options: options.contactPref },
   { name: 'status', label: 'Statut', type: 'select', required: true, options: options.inquiryStatus },
-  { name: 'consent', label: 'La personne accepte d’être recontactée', type: 'boolean' },
+  { name: 'consent', label: 'La personne a donné son accord pour être recontactée', type: 'boolean', help: 'À cocher uniquement si l’accord a été exprimé. Votre nom et la date sont enregistrés comme preuve.' },
 ];
 
 export const inquiriesConfig: ResourceConfig = {
@@ -253,7 +258,7 @@ export const inquiriesConfig: ResourceConfig = {
   filters: [{ name: 'status', label: 'Statut', options: options.inquiryStatus }, { name: 'source', label: 'Canal', options: options.inquirySource }],
   hiddenStatuses: { column: 'status', values: ['spam'], label: 'Afficher les indésirables' },
   fields: inquiryFields,
-  defaults: { source: 'telephone', contact_preference: 'telephone', status: 'nouveau', consent: true },
+  defaults: { source: 'telephone', contact_preference: 'telephone', status: 'nouveau', consent: false },
   notice: 'Les conversations WhatsApp ne sont pas importées automatiquement : enregistrez ici les demandes reçues par WhatsApp ou téléphone.',
   columns: [
     { key: 'full_name', label: 'Contact' },
@@ -396,6 +401,7 @@ export const revenuesConfig: ResourceConfig = {
   canCreate: 'finance',
   canEdit: 'finance',
   hasDetail: true,
+  canDelete: false,
 };
 
 export const expenseFields: FieldDef[] = [
@@ -419,6 +425,7 @@ export const expensesConfig: ResourceConfig = {
   order: { column: 'expense_date' },
   search: ['reference', 'description', 'category'],
   fields: expenseFields,
+  attachment: { bucket: 'finance-receipts', column: 'receipt_path', label: 'Justificatif de la dépense', folder: 'depenses' },
   defaults: () => ({ payment_method: 'especes', expense_date: todayISO() }),
   columns: [
     { key: 'description', label: 'Dépense' },

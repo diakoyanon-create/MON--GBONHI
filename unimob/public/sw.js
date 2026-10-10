@@ -1,6 +1,6 @@
-// Service worker minimal : cache des ressources statiques uniquement.
-// Les données (Supabase), les pages privées et les documents ne sont JAMAIS mis en cache.
-const CACHE = 'agence-static-v1';
+// Service worker minimal : cache des ressources statiques versionnées uniquement.
+// Les données (Supabase), les pages HTML, les pages privées et les documents ne sont JAMAIS mis en cache.
+const CACHE = 'agence-static-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
@@ -21,7 +21,10 @@ self.addEventListener('fetch', (event) => {
       const hit = await cache.match(req);
       if (hit) return hit;
       const res = await fetch(req);
-      if (res.ok) cache.put(req, res.clone());
+      // Après un déploiement, un ancien fichier absent est remplacé par index.html (repli SPA) :
+      // ne jamais mettre en cache une réponse HTML sous l'URL d'un fichier statique.
+      const type = res.headers.get('content-type') || '';
+      if (res.ok && !type.includes('text/html')) cache.put(req, res.clone());
       return res;
     }),
   );

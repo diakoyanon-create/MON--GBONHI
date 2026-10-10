@@ -12,6 +12,11 @@ export function db(): pg.Pool {
   pool ??= new pg.Pool({ connectionString: url(), max: 4 });
   return pool;
 }
+/** Bascule les helpers vers une autre base (ex. base « stricte »). */
+export async function useDatabase(connectionString: string) {
+  await pool?.end();
+  pool = new pg.Pool({ connectionString, max: 4 });
+}
 export async function closeDb() {
   await pool?.end();
   pool = null;
@@ -62,7 +67,7 @@ export async function makePublishableProperty(overrides: Record<string, unknown>
   const [owner] = await sql(`insert into owners (last_name, phone_primary) values ('TEST', '+225 01 02 03 04 05') returning id`);
   const [prop] = await sql(
     `insert into properties (property_type, title, description, city, price_xof, owner_id, verification_status, commercial_status, is_demo)
-     values ('maison', $1, 'Description de test suffisamment longue.', 'Abidjan', $2, $3, 'verifie', 'disponible', true)
+     values ('maison', $1, 'Description de test suffisamment longue.', 'Abidjan', $2, $3, 'verifie', 'disponible', false)
      returning id, reference`,
     [overrides.title ?? 'Maison de test', overrides.price ?? 50000000, owner.id],
   );

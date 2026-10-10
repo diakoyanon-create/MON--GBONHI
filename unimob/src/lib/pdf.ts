@@ -18,6 +18,24 @@ export type PdfBuilder = {
 
 const MARGIN = 16;
 
+/**
+ * La police Helvetica intégrée à jsPDF ne couvre que l'encodage WinAnsi : un seul caractère
+ * hors de cet ensemble (→, −, ≤, espaces fines…) rend toute la ligne illisible.
+ */
+export function pdfSafe(input: unknown): string {
+  return String(input ?? '')
+    .replace(/[\u202f\u00a0\u2007\u2009]/g, ' ')
+    .replace(/[→⟶]/g, '->')
+    .replace(/[←]/g, '<-')
+    .replace(/[−‐‑‒]/g, '-')
+    .replace(/≤/g, '<=')
+    .replace(/≥/g, '>=')
+    .replace(/[✓✔]/g, 'oui')
+    .replace(/[✘✗]/g, 'non')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x00-\xff€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, '?');
+}
+
 export async function buildPdf(agency: PdfAgency, title: string, reference: string, confidential: boolean): Promise<PdfBuilder> {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -30,21 +48,22 @@ export async function buildPdf(agency: PdfAgency, title: string, reference: stri
   doc.setTextColor(220, 199, 156);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.text(agency.agency_name, MARGIN, 11);
+  doc.text(pdfSafe(agency.agency_name), MARGIN, 11);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(236, 236, 239);
-  doc.text([agency.phone, agency.email, agency.address].filter(Boolean).join('  ·  ') || ' ', MARGIN, 18);
+  doc.text(pdfSafe([agency.phone, agency.email, agency.address].filter(Boolean).join('  ·  ') || ' '), MARGIN, 18);
   y = 36;
   doc.setTextColor(31, 31, 34);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(title, MARGIN, y);
-  y += 6;
+  const titleLines = doc.splitTextToSize(pdfSafe(title), width - MARGIN * 2) as string[];
+  doc.text(titleLines, MARGIN, y);
+  y += 6 * titleLines.length;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(107, 107, 115);
-  doc.text(`Référence : ${reference}   ·   Généré le ${formatDateTime(new Date())} (heure d’Abidjan)`, MARGIN, y);
+  doc.text(pdfSafe(`Référence : ${reference}   ·   Généré le ${formatDateTime(new Date())} (heure d’Abidjan)`), MARGIN, y);
   y += 4;
   if (confidential) {
     doc.setTextColor(153, 27, 27);
@@ -64,11 +83,13 @@ export async function buildPdf(agency: PdfAgency, title: string, reference: stri
   const builder: PdfBuilder = {
     doc,
     heading(text) {
-      ensure(12);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11.5);
+      const lines = doc.splitTextToSize(pdfSafe(text), width - MARGIN * 2) as string[];
+      ensure(7 + lines.length * 5);
       doc.setTextColor(124, 98, 52);
-      doc.text(text, MARGIN, y);
+      doc.text(lines, MARGIN, y);
+      y += (lines.length - 1) * 5;
       doc.setDrawColor(220, 199, 156);
       doc.line(MARGIN, y + 1.5, width - MARGIN, y + 1.5);
       y += 7;
@@ -77,7 +98,7 @@ export async function buildPdf(agency: PdfAgency, title: string, reference: stri
     paragraph(text) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9.5);
-      const lines = doc.splitTextToSize(text || '—', width - MARGIN * 2) as string[];
+      const lines = doc.splitTextToSize(pdfSafe(text || '—'), width - MARGIN * 2) as string[];
       for (const line of lines) {
         ensure(5);
         doc.text(line, MARGIN, y);
@@ -88,7 +109,7 @@ export async function buildPdf(agency: PdfAgency, title: string, reference: stri
     keyValues(pairs) {
       autoTable(doc, {
         startY: y,
-        body: pairs,
+        body: pairs.map(([k, v]) => [pdfSafe(k), pdfSafe(v)]),
         theme: 'plain',
         margin: { left: MARGIN, right: MARGIN },
         styles: { fontSize: 9, cellPadding: 1.4 },
@@ -99,8 +120,8 @@ export async function buildPdf(agency: PdfAgency, title: string, reference: stri
     table(head, body) {
       autoTable(doc, {
         startY: y,
-        head: [head],
-        body: body.length ? body : [[...head.map((_, i) => (i === 0 ? 'Aucun élément' : ''))]],
+        head: [head.map(pdfSafe)],
+        body: body.length ? body.map((r) => r.map(pdfSafe)) : [[...head.map((_, i) => (i === 0 ? 'Aucun élément' : ''))]],
         margin: { left: MARGIN, right: MARGIN },
         styles: { fontSize: 8.5, cellPadding: 1.6 },
         headStyles: { fillColor: [43, 43, 48], textColor: [236, 236, 239] },
@@ -121,7 +142,9 @@ function addFooters(doc: jsPDF, footer: string) {
     doc.setPage(i);
     doc.setFontSize(7.5);
     doc.setTextColor(107, 107, 115);
-    doc.text(footer, MARGIN, h - 8);
+    // Pied de page sur plusieurs lignes si nécessaire, sans chevaucher le numéro de page.
+    const lines = doc.splitTextToSize(pdfSafe(footer), w - MARGIN * 2 - 22) as string[];
+    doc.text(lines, MARGIN, h - 8 - (lines.length - 1) * 3.2);
     doc.text(`Page ${i} / ${pages}`, w - MARGIN, h - 8, { align: 'right' });
   }
 }

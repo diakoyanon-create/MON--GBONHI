@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { listRows } from '@/api/crud';
+import { deleteRow, listRows } from '@/api/crud';
+import { useAuth } from '@/auth/AuthContext';
 import { useQuery } from '@/api/hooks';
 import { CHANNELS, label, options } from '@/domain/labels';
 import { formatDateTime } from '@/lib/format';
 import { ResourceForm } from '@/resources/ResourceForm';
 import type { FieldDef } from '@/resources/types';
 import { REL } from '@/resources/configs';
-import { Modal, Section, Spinner } from './ui';
+import { ErrorBox, Modal, Section, Spinner, humanError } from './ui';
 
 const fields: FieldDef[] = [
   { name: 'channel', label: 'Canal', type: 'select', required: true, options: options.channels },
@@ -18,15 +19,18 @@ const fields: FieldDef[] = [
 ];
 
 /** Historique des échanges d'un prospect ou d'un propriétaire. */
-export function InteractionsPanel({ buyerId, ownerId }: { buyerId?: string; ownerId?: string }) {
+export function InteractionsPanel({ buyerId, ownerId, onChange }: { buyerId?: string; ownerId?: string; onChange?: () => void }) {
+  const { can } = useAuth();
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const eq = buyerId ? { buyer_id: buyerId } : { owner_id: ownerId };
   const { data, loading, reload } = useQuery(
     () => listRows('interactions', { select: '*, property:properties!interactions_property_id_fkey(reference)', eq, order: { column: 'occurred_at', ascending: false }, pageSize: 100 }),
     [buyerId, ownerId],
   );
   return (
-    <Section title="Historique des échanges" actions={<button className="btn-outline btn-sm" onClick={() => setOpen(true)}>+ Échange</button>}>
+    <Section title="Historique des échanges" actions={can.sales ? <button className="btn-outline btn-sm" onClick={() => setOpen(true)}>+ Échange</button> : null}>
+      <ErrorBox error={error} />
       {loading ? <Spinner /> : !data?.rows.length ? <p className="text-sm text-ink-500">Aucun échange enregistré.</p> : (
         <ul className="space-y-3">
           {data.rows.map((i) => (
@@ -36,6 +40,24 @@ export function InteractionsPanel({ buyerId, ownerId }: { buyerId?: string; owne
               </div>
               <p className="whitespace-pre-line">{i.summary}</p>
               {i.next_action && <p className="text-xs text-gold-700">→ {i.next_action}</p>}
+              {can.admin && (
+                <button
+                  className="mt-1 text-xs text-red-700 underline"
+                  onClick={async () => {
+                    if (!window.confirm('Supprimer cet échange ? (action tracée dans le journal)')) return;
+                    setError(null);
+                    try {
+                      await deleteRow('interactions', i.id);
+                      reload();
+                      onChange?.();
+                    } catch (e) {
+                      setError(humanError(e));
+                    }
+                  }}
+                >
+                  Supprimer
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -49,6 +71,7 @@ export function InteractionsPanel({ buyerId, ownerId }: { buyerId?: string; owne
           onSaved={() => {
             setOpen(false);
             reload();
+            onChange?.();
           }}
           onCancel={() => setOpen(false)}
         />

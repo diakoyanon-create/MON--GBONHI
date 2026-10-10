@@ -9,7 +9,8 @@ import { COMMISSION_DISCLAIMER } from '@/domain/commission';
 import { storagePath, validateFile } from '@/domain/files';
 import { OFFER_STATUS, PAYMENT_METHODS, REVENUE_STATUS, REVENUE_TYPES, TRANSACTION_STATUS, VISIT_STATUS, label, options } from '@/domain/labels';
 import { formatDate, formatDateTime, formatXOF, fullName, todayISO } from '@/lib/format';
-import { signedUrl } from '@/lib/photos';
+import { openPrivateFile, PRIVATE_UPLOAD_OPTIONS } from '@/lib/photos';
+import { parseXOF } from '@/lib/money';
 import { RECEIPTS_BUCKET, supabase } from '@/lib/supabase';
 import { ResourceForm } from '@/resources/ResourceForm';
 import { ResourceList } from '@/resources/ResourceList';
@@ -201,7 +202,7 @@ export function RevenueDetailPage() {
                     <td>{label(PAYMENT_METHODS, p.method)}</td>
                     <td>{p.payment_reference ?? '—'}</td>
                     <td>{p.is_correction ? <strong>Correction : </strong> : null}{p.note ?? ''}</td>
-                    <td>{p.receipt_path ? <button className="btn-ghost btn-sm" onClick={async () => window.open(await signedUrl(RECEIPTS_BUCKET, p.receipt_path), '_blank', 'noopener')}>Voir</button> : '—'}</td>
+                    <td>{p.receipt_path ? <button className="btn-ghost btn-sm" onClick={() => openPrivateFile(RECEIPTS_BUCKET, p.receipt_path).catch(() => window.alert('Justificatif indisponible.'))}>Voir</button> : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -229,7 +230,7 @@ function PaymentForm({ entryId, correction, max, onDone }: { entryId: string; co
 
   async function submit(ev: React.FormEvent) {
     ev.preventDefault();
-    const n = Number(amount.replace(/\s/g, ''));
+    const n = parseXOF(amount);
     if (!Number.isInteger(n) || n <= 0) return setError('Montant entier positif en FCFA.');
     if (n > max) return setError(`Montant supérieur au maximum autorisé (${formatXOF(max)}).`);
     if (correction && note.trim().length < 5) return setError('Le motif de la correction est obligatoire.');
@@ -241,7 +242,7 @@ function PaymentForm({ entryId, correction, max, onDone }: { entryId: string; co
         const problem = validateFile(file, 'receipt');
         if (problem) throw new Error(problem);
         receiptPath = storagePath(entryId, file.type);
-        const { error: upErr } = await supabase.storage.from(RECEIPTS_BUCKET).upload(receiptPath, file, { contentType: file.type });
+        const { error: upErr } = await supabase.storage.from(RECEIPTS_BUCKET).upload(receiptPath, file, { contentType: file.type, ...PRIVATE_UPLOAD_OPTIONS });
         if (upErr) throw upErr;
       }
       const { error: dbErr } = await supabase.from('payments').insert({

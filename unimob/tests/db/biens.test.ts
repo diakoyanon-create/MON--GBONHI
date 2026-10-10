@@ -70,7 +70,7 @@ describe('Publication', () => {
     const [p] = await as(agent, (q) => q(`insert into properties (property_type, title, city) values ('maison', 'Incomplet', 'Abidjan') returning id`));
     const [{ b }] = await as(agent, (q) => q('select publication_blockers($1) b', [p.id]));
     expect(b).toEqual(expect.arrayContaining([
-      'Le prix doit être renseigné', 'Le bien doit être vérifié', 'Un mandat actif est requis', 'Au moins une photo est requise',
+      'Le prix doit être renseigné', 'Le bien doit être vérifié', 'Un mandat actif et en cours de validité est requis', 'Au moins une photo est requise',
     ]));
     await expect(as(agent, (q) => q(`update properties set commercial_status = 'publie' where id = $1`, [p.id]))).rejects.toThrow(/Publication impossible/);
   });

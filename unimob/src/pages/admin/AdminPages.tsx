@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { listRows, logEvent, rpc, updateRow, type Row } from '@/api/crud';
+import { listAllRows, listRows, logEvent, rpc, updateRow, type Row } from '@/api/crud';
 import { resetPublicAgencyCache, useAgencySettings, useQuery } from '@/api/hooks';
 import { useAuth } from '@/auth/AuthContext';
 import { ErrorBox, PageHeader, Section, Spinner, StatusBadge, SuccessBox, humanError } from '@/components/ui';
 import { downloadText, toCsv, type CsvColumn } from '@/domain/csv';
 import {
-  BUYER_STATUS, MANDATE_STATUS, PROPERTY_STATUS, PROPERTY_TYPES, REVENUE_STATUS, ROLES, TASK_PRIORITY, TASK_STATUS, TRANSACTION_STATUS,
+  BUYER_STATUS, MANDATE_STATUS, OFFER_STATUS, PROPERTY_STATUS, PROPERTY_TYPES, REVENUE_STATUS, ROLES, TASK_PRIORITY, TASK_STATUS, TRANSACTION_STATUS,
   VERIFICATION_STATUS, VISIT_STATUS, label, options,
 } from '@/domain/labels';
 import { formatDate, formatDateTime, fullName, todayISO } from '@/lib/format';
@@ -89,7 +89,7 @@ type ReportDef = {
 };
 
 const REPORTS: ReportDef[] = [
-  { key: 'inventaire', title: 'Inventaire des biens', need: 'staff', table: 'properties', select: 'reference, title, property_type, region, city, district, price_xof, area, area_unit, commercial_status, verification_status, published_at', dateColumn: 'created_at',
+  { key: 'inventaire', title: 'Inventaire des biens (état actuel)', need: 'staff', table: 'properties', select: 'reference, title, property_type, region, city, district, price_xof, area, area_unit, commercial_status, verification_status, published_at',
     columns: [{ key: 'reference', header: 'Référence' }, { key: 'title', header: 'Titre' }, { key: 'property_type', header: 'Type', value: (r) => label(PROPERTY_TYPES, r.property_type) }, { key: 'region', header: 'Région' }, { key: 'city', header: 'Ville' }, { key: 'district', header: 'Quartier' }, { key: 'price_xof', header: 'Prix XOF' }, { key: 'area', header: 'Superficie' }, { key: 'area_unit', header: 'Unité' }, { key: 'commercial_status', header: 'Statut', value: (r) => label(PROPERTY_STATUS, r.commercial_status) }, { key: 'verification_status', header: 'Vérification', value: (r) => label(VERIFICATION_STATUS, r.verification_status) }, { key: 'published_at', header: 'Publié le', value: (r) => formatDate(r.published_at) }] },
   { key: 'prospects', title: 'Prospects', need: 'sales', table: 'buyers', select: 'reference, last_name, first_names, phone, email, budget_min, budget_max, zones, status, source, last_contact_at, next_follow_up_at, consent_marketing', dateColumn: 'created_at',
     columns: [{ key: 'reference', header: 'Référence' }, { key: 'last_name', header: 'Nom' }, { key: 'first_names', header: 'Prénoms' }, { key: 'phone', header: 'Téléphone' }, { key: 'email', header: 'Courriel' }, { key: 'budget_min', header: 'Budget min' }, { key: 'budget_max', header: 'Budget max' }, { key: 'zones', header: 'Zones' }, { key: 'status', header: 'Statut', value: (r) => label(BUYER_STATUS, r.status) }, { key: 'source', header: 'Source' }, { key: 'last_contact_at', header: 'Dernier contact', value: (r) => formatDateTime(r.last_contact_at) }, { key: 'next_follow_up_at', header: 'Relance', value: (r) => formatDateTime(r.next_follow_up_at) }, { key: 'consent_marketing', header: 'Accepte offres', value: (r) => (r.consent_marketing ? 'oui' : 'non') }] },
@@ -97,7 +97,9 @@ const REPORTS: ReportDef[] = [
     columns: [{ key: 'reference', header: 'Référence' }, { key: 'scheduled_at', header: 'Date', value: (r) => formatDateTime(r.scheduled_at) }, { key: 'property', header: 'Bien', value: (r) => r.property?.reference }, { key: 'buyer', header: 'Prospect', value: (r) => r.buyer?.reference }, { key: 'status', header: 'Statut', value: (r) => label(VISIT_STATUS, r.status) }, { key: 'interest_level', header: 'Intérêt' }, { key: 'location', header: 'Lieu' }, { key: 'next_action', header: 'Prochaine action' }] },
   { key: 'transactions', title: 'Négociations et transactions', need: 'sales', table: 'transactions', select: 'reference, status, initial_asking_price, agreed_price, commission_agreed, concluded_date, abandon_reason, property:properties!transactions_property_id_fkey(reference)', dateColumn: 'created_at',
     columns: [{ key: 'reference', header: 'Dossier' }, { key: 'property', header: 'Bien', value: (r) => r.property?.reference }, { key: 'status', header: 'Statut', value: (r) => label(TRANSACTION_STATUS, r.status) }, { key: 'initial_asking_price', header: 'Prix demandé' }, { key: 'agreed_price', header: 'Prix convenu' }, { key: 'commission_agreed', header: 'Commission convenue' }, { key: 'concluded_date', header: 'Conclusion', value: (r) => formatDate(r.concluded_date) }, { key: 'abandon_reason', header: 'Motif abandon' }] },
-  { key: 'commissions', title: 'Commissions', need: 'finance', table: 'transaction_commissions', select: 'reference, status, base_price, commission_estimated, commission_agreed, commission_due, commission_received, commission_balance',
+  { key: 'offres', title: 'Offres et contre-offres', need: 'sales', table: 'negotiations', select: 'offer_kind, from_party, amount, offered_at, valid_until, status, conditions, transaction:transactions!negotiations_transaction_id_fkey(reference)', dateColumn: 'offered_at',
+    columns: [{ key: 'transaction', header: 'Dossier', value: (r) => r.transaction?.reference }, { key: 'offered_at', header: 'Date', value: (r) => formatDateTime(r.offered_at) }, { key: 'offer_kind', header: 'Type', value: (r) => (r.offer_kind === 'offre' ? 'Offre' : 'Contre-offre') }, { key: 'from_party', header: 'Émise par' }, { key: 'amount', header: 'Montant XOF' }, { key: 'status', header: 'Statut', value: (r) => label(OFFER_STATUS, r.status) }, { key: 'valid_until', header: 'Valable jusqu’au', value: (r) => formatDate(r.valid_until) }, { key: 'conditions', header: 'Conditions' }] },
+  { key: 'commissions', title: 'Commissions (état actuel)', need: 'finance', table: 'transaction_commissions', select: 'reference, status, base_price, commission_estimated, commission_agreed, commission_due, commission_received, commission_balance',
     columns: [{ key: 'reference', header: 'Dossier' }, { key: 'status', header: 'Statut', value: (r) => label(TRANSACTION_STATUS, r.status) }, { key: 'base_price', header: 'Base' }, { key: 'commission_estimated', header: 'Estimée' }, { key: 'commission_agreed', header: 'Convenue' }, { key: 'commission_due', header: 'Exigible' }, { key: 'commission_received', header: 'Encaissée' }, { key: 'commission_balance', header: 'Solde' }] },
   { key: 'recettes', title: 'Recettes', need: 'finance', table: 'financial_entries', select: 'reference, entry_date, entry_type, amount_expected, amount_received, balance, status, description', dateColumn: 'entry_date',
     columns: [{ key: 'reference', header: 'Référence' }, { key: 'entry_date', header: 'Date', value: (r) => formatDate(r.entry_date) }, { key: 'entry_type', header: 'Type' }, { key: 'amount_expected', header: 'Attendu' }, { key: 'amount_received', header: 'Encaissé' }, { key: 'balance', header: 'Solde' }, { key: 'status', header: 'Statut', value: (r) => label(REVENUE_STATUS, r.status) }, { key: 'description', header: 'Description' }] },
@@ -115,7 +117,7 @@ export function ReportsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const zones = useQuery(async () => {
-    const { rows } = await listRows('properties', { select: 'city, district, commercial_status', notIn: { commercial_status: ['archive'] }, pageSize: 5000 });
+    const rows = await listAllRows('properties', { select: 'city, district, commercial_status', notIn: { commercial_status: ['archive'] } });
     const map = new Map<string, Record<string, number>>();
     for (const r of rows) {
       const k = r.city ?? '—';
@@ -132,15 +134,16 @@ export function ReportsPage() {
     setErr(null);
     setMsg(null);
     try {
-      const { rows } = await listRows(r.table, {
+      const rows = await listAllRows(r.table, {
         select: r.select,
         gte: r.dateColumn ? { [r.dateColumn]: from } : undefined,
         lte: r.dateColumn ? { [r.dateColumn]: `${to}T23:59:59Z` } : undefined,
-        order: r.dateColumn ? { column: r.dateColumn } : undefined,
-        pageSize: 10000,
+        order: r.dateColumn ? { column: r.dateColumn } : { column: 'reference', ascending: true },
       });
-      downloadText(`${r.key}-${from}-${to}.csv`, toCsv(rows, r.columns));
-      await logEvent('export_csv', r.table, `Rapport ${r.title} ${from} → ${to} (${rows.length} lignes)`);
+      const csv = toCsv(rows, r.columns);
+      // Journalisation d'abord : pas d'export sensible sans trace.
+      await logEvent('export_csv', r.table, `Rapport ${r.title}${r.dateColumn ? ` du ${from} au ${to}` : ''} (${rows.length} lignes)`);
+      downloadText(`${r.key}-${r.dateColumn ? `${from}-${to}` : todayISO()}.csv`, csv);
       setMsg(`${rows.length} ligne(s) exportée(s).`);
     } catch (e) {
       setErr(humanError(e));
@@ -157,15 +160,25 @@ export function ReportsPage() {
       </div>
       <ErrorBox error={err} />
       {msg && <SuccessBox>{msg}</SuccessBox>}
-      <Section title="Exports CSV (période)">
+      <Section title="Exports CSV">
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {REPORTS.filter((r) => can[r.need]).map((r) => (
-            <li key={r.key}><button className="btn-outline w-full justify-between" onClick={() => void exportReport(r)}>{r.title} <span aria-hidden>↓</span></button></li>
+            <li key={r.key}><button className="btn-outline w-full justify-between" onClick={() => void exportReport(r)}>{r.title}{r.dateColumn ? ' (période)' : ''} <span aria-hidden>↓</span></button></li>
           ))}
         </ul>
         <p className="mt-3 text-xs text-ink-500">Les mots de passe, clés, jetons et données d’authentification ne sont jamais exportés.</p>
       </Section>
-      <Section title="Biens par zone">
+      <Section
+        title="Biens par zone"
+        actions={zones.data?.length ? (
+          <button className="btn-outline btn-sm" onClick={() => {
+            const rows = zones.data!.map(([city, m]) => ({ city, ...m }));
+            logEvent('export_csv', 'properties', `Biens par zone (${rows.length} zones)`)
+              .then(() => downloadText(`biens-par-zone-${todayISO()}.csv`, toCsv(rows, [{ key: 'city', header: 'Ville / commune' }, { key: 'total', header: 'Biens' }, { key: 'enLigne', header: 'En ligne' }, { key: 'vendus', header: 'Vendus' }])))
+              .catch((e) => setErr(humanError(e)));
+          }}>Export CSV</button>
+        ) : null}
+      >
         {zones.loading ? <Spinner /> : (
           <table className="table">
             <thead><tr><th>Ville / commune</th><th>Biens</th><th>En ligne</th><th>Vendus</th></tr></thead>
@@ -305,8 +318,8 @@ export function UsersPage() {
   const save = async (id: string, patch: Row) => {
     setErr(null);
     try {
+      // Le changement est journalisé automatiquement par la base (déclencheur sur profiles).
       await updateRow('profiles', id, patch);
-      await logEvent('permissions', 'profiles', `Rôle/activation modifiés : ${JSON.stringify(patch)}`, id);
       reload();
     } catch (e) {
       setErr(humanError(e));
@@ -318,7 +331,7 @@ export function UsersPage() {
       <Section title="Ajouter un membre de l’équipe">
         <ol className="list-inside list-decimal space-y-1 text-sm text-ink-700">
           <li>Dans le tableau de bord Supabase : <em>Authentication → Users → Invite user</em> (l’inscription publique doit rester désactivée).</li>
-          <li>La personne reçoit un courriel et choisit son mot de passe.</li>
+          <li>La personne reçoit un courriel : le lien ouvre la page « Choisir un mot de passe » du site (Site URL configurée dans Supabase).</li>
           <li>Son compte apparaît ci-dessous <strong>sans aucun accès</strong> : attribuez un rôle puis activez-le.</li>
         </ol>
         <p className="mt-2 text-xs text-ink-500">Rôles : Administrateur (tout), Agent (commercial + négociations), Assistant (commercial sans négociation), Comptable (finances). Principe du moindre privilège.</p>

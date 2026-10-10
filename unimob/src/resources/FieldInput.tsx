@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listRows, type Row } from '@/api/crud';
+import { getRow, listRows, type Row } from '@/api/crud';
 import type { FieldDef } from './types';
 import type { Option } from '@/domain/labels';
 
@@ -11,9 +11,25 @@ type Props = {
   settings?: Record<string, any> | null;
 };
 
-export function useRelationOptions(field: FieldDef): Option[] {
+export function useRelationOptions(field: FieldDef, current?: string): Option[] {
   const [opts, setOpts] = useState<Option[]>([]);
+  const [extra, setExtra] = useState<Option | null>(null);
   const rel = field.relation;
+  // La valeur enregistrée peut être absente de la liste (élément archivé, inactif, hors des 500 premiers) :
+  // on la charge pour l'afficher au lieu de « — Choisir — ».
+  useEffect(() => {
+    if (!rel || !current || opts.some((o) => o.value === current)) {
+      setExtra(null);
+      return;
+    }
+    let alive = true;
+    getRow(rel.table, current, rel.select)
+      .then((r) => alive && setExtra({ value: current, label: r ? `${rel.label(r)} (non listé : archivé ou inactif)` : 'Élément actuel (non accessible)' }))
+      .catch(() => alive && setExtra({ value: current, label: 'Élément actuel (non accessible)' }));
+    return () => {
+      alive = false;
+    };
+  }, [rel, current, opts]);
   useEffect(() => {
     if (!rel) return;
     let alive = true;
@@ -28,12 +44,12 @@ export function useRelationOptions(field: FieldDef): Option[] {
       alive = false;
     };
   }, [rel]);
-  return opts;
+  return extra ? [extra, ...opts] : opts;
 }
 
 export function FieldInput({ field, value, error, onChange, settings }: Props) {
   const id = `f-${field.name}`;
-  const relOptions = useRelationOptions(field);
+  const relOptions = useRelationOptions(field, field.relation && typeof value === 'string' ? value : undefined);
   const describedBy = error ? `${id}-err` : field.help ? `${id}-help` : undefined;
   const common = {
     id,

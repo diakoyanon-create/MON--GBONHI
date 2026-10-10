@@ -9,7 +9,7 @@ STAMP="$(date -u +%Y%m%d-%H%M%S)"
 mkdir -p "$OUT_DIR"
 chmod 700 "$OUT_DIR"
 FILE="$OUT_DIR/base-$STAMP.dump"
-pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner --no-privileges \
+pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner \
   --schema=public --schema=auth --file="$FILE"
 chmod 600 "$FILE"
 # Vérification minimale : le fichier est lisible par pg_restore et contient les tables métier.

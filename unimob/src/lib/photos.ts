@@ -7,9 +7,25 @@ export function photoUrl(path: string | null | undefined): string | null {
   return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
-/** URL signée temporaire (5 minutes) pour un document privé. */
-export async function signedUrl(bucket: string, path: string, seconds = 300): Promise<string> {
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, seconds);
-  if (error) throw error;
-  return data.signedUrl;
+/** Les fichiers privés sont envoyés sans mise en cache navigateur. */
+export const PRIVATE_UPLOAD_OPTIONS = { cacheControl: '0', upsert: false } as const;
+
+/**
+ * Ouvre un document privé sans créer d'URL réutilisable : le fichier est téléchargé avec la
+ * session de l'utilisateur puis affiché depuis la mémoire du navigateur (URL locale révoquée).
+ */
+export async function openPrivateFile(bucket: string, path: string): Promise<void> {
+  // Fenêtre ouverte immédiatement (sinon bloquée comme pop-up après un appel réseau).
+  const win = window.open('', '_blank');
+  try {
+    const { data, error } = await supabase.storage.from(bucket).download(path);
+    if (error || !data) throw error ?? new Error('Document introuvable');
+    const url = URL.createObjectURL(data);
+    if (win) win.location.href = url;
+    else window.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    win?.close();
+    throw e;
+  }
 }

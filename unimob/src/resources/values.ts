@@ -1,3 +1,4 @@
+import { parseXOF } from '@/lib/money';
 import { fromDateTimeInput, toDateTimeInput } from '@/lib/format';
 import type { FieldDef } from './types';
 import type { Row } from '@/api/crud';
@@ -33,7 +34,9 @@ export function fromFormValues(fields: FieldDef[], values: FormValues, isEdit: b
   for (const f of fields) {
     if (f.editOnly && !isEdit) continue;
     if (f.showIf && !f.showIf(values)) {
-      out[f.name] = f.type === 'boolean' ? false : f.type === 'tags' || f.type === 'multiselect' ? [] : null;
+      // En modification, un champ masqué n'est pas envoyé : sa valeur enregistrée est conservée
+      // (ex. motif « Vendu (TRX-…) » posé par la base). À la création, il reste vide.
+      if (!isEdit) out[f.name] = f.type === 'boolean' ? false : f.type === 'tags' || f.type === 'multiselect' ? [] : null;
       continue;
     }
     const v = values[f.name];
@@ -45,8 +48,12 @@ export function fromFormValues(fields: FieldDef[], values: FormValues, isEdit: b
       case 'multiselect':
         out[f.name] = Array.isArray(v) ? v.map((s: string) => s.trim()).filter(Boolean) : [];
         break;
-      case 'number':
       case 'money': {
+        const s = String(v ?? '').trim();
+        out[f.name] = s === '' ? null : parseXOF(s);
+        break;
+      }
+      case 'number': {
         const s = String(v ?? '').replace(/\s/g, '').replace(',', '.');
         out[f.name] = s === '' ? null : Number(s);
         break;
@@ -76,8 +83,8 @@ export function validate(fields: FieldDef[], values: FormValues): Record<string,
     }
     if (empty) continue;
     if (f.type === 'number' || f.type === 'money') {
-      const n = Number(String(v).replace(/\s/g, '').replace(',', '.'));
-      if (!Number.isFinite(n)) errors[f.name] = 'Nombre invalide';
+      const n = f.type === 'money' ? parseXOF(String(v)) : Number(String(v).replace(/\s/g, '').replace(',', '.'));
+      if (!Number.isFinite(n)) errors[f.name] = f.type === 'money' ? 'Montant invalide (ex. 150000 ou 150 000)' : 'Nombre invalide';
       else if (f.min !== undefined && n < f.min) errors[f.name] = `Minimum ${f.min}`;
       else if (f.max !== undefined && n > f.max) errors[f.name] = `Maximum ${f.max}`;
       else if (f.type === 'money' && !Number.isInteger(n)) errors[f.name] = 'Montant entier en FCFA';

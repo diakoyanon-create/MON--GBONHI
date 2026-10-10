@@ -137,9 +137,12 @@ export function humanError(err: unknown): string {
   const e = err as { message?: string; code?: string; details?: string } | null;
   const msg = e?.message ?? String(err ?? 'Erreur inconnue');
   if (e?.code === '23505' || /duplicate key/.test(msg)) return 'Cette référence ou cette valeur existe déjà.';
-  if (e?.code === '42501' || /row-level security|permission denied/.test(msg)) return "Action non autorisée pour votre rôle.";
+  if (/row-level security|permission denied/.test(msg)) return 'Action non autorisée pour votre rôle.';
   if (e?.code === '23503' || /foreign key/.test(msg)) return "Impossible : cet élément est lié à d'autres dossiers. Archivez-le plutôt.";
   if (e?.code === '23514' && /check constraint/.test(msg)) return 'Certaines valeurs ne respectent pas les règles (montants, dates ou champs obligatoires).';
-  if (/Failed to fetch|NetworkError/.test(msg)) return 'Connexion réseau indisponible. Vos saisies sont conservées, réessayez.';
+  if (e?.code === 'PGRST103') return 'Cette page n’existe plus : revenez à la première page.';
+  if (/JWT expired|invalid JWT|refresh_token/i.test(msg)) return 'Votre session a expiré : reconnectez-vous.';
+  if (/Failed to fetch|NetworkError|Load failed/.test(msg)) return 'Connexion réseau indisponible. Vos saisies sont conservées, réessayez.';
+  // Les autres messages (règles métier de la base) sont rédigés en français pour l'utilisateur.
   return msg;
 }

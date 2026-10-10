@@ -5,10 +5,18 @@ import { Spinner } from '@/components/ui';
 
 /** Protège l'espace privé : session + rôle actif obligatoires (la base applique aussi RLS). */
 export function RequireStaff({ children, need }: { children: ReactNode; need?: keyof Permissions }) {
-  const { loading, session, profile, can, signOut } = useAuth();
+  const { loading, profileError, session, profile, can, signOut } = useAuth();
   const location = useLocation();
   if (loading) return <div className="flex min-h-screen items-center justify-center"><Spinner /></div>;
   if (!session) return <Navigate to="/connexion" replace state={{ from: location.pathname }} />;
+  if (!profile && profileError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-4 text-center">
+        <Spinner label="Connexion au serveur impossible pour le moment, nouvelle tentative…" />
+        <button className="btn-outline btn-sm" onClick={() => window.location.reload()}>Réessayer maintenant</button>
+      </div>
+    );
+  }
   if (!profile || !can.staff) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">

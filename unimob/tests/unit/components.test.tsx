@@ -14,7 +14,7 @@ vi.mock('@/api/hooks', async (orig) => ({ ...(await orig<typeof import('@/api/ho
 
 function withAuth(profile: Profile | null, session: boolean, ui: React.ReactNode, path = '/admin') {
   const value = {
-    loading: false, session: session ? ({ user: { id: 'u' } } as never) : null, profile, can: permissionsFor(profile),
+    loading: false, profileError: false, session: session ? ({ user: { id: 'u' } } as never) : null, profile, can: permissionsFor(profile),
     signIn: async () => null, signOut: async () => {}, refreshProfile: async () => {},
   };
   return render(
@@ -88,7 +88,7 @@ describe('conversion des formulaires', () => {
   });
   it('valide obligatoires, bornes, montants entiers et courriel', () => {
     const errs = validate(fields, { title: '', price: '10.5', rooms: '11', email: 'bad', tags: [], ok: false, when: '' });
-    expect(errs).toMatchObject({ title: 'Champ obligatoire', price: 'Montant entier en FCFA', rooms: 'Maximum 10', email: 'Adresse électronique invalide' });
+    expect(errs).toMatchObject({ title: 'Champ obligatoire', price: 'Montant invalide (ex. 150000 ou 150 000)', rooms: 'Maximum 10', email: 'Adresse électronique invalide' });
   });
 });
 
