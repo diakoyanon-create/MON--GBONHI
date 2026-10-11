@@ -13,7 +13,11 @@ Aucune dépense n’est nécessaire avec l’offre gratuite ; vérifiez les quot
 ## 2. Appliquer les migrations
 
 Option A0 — le plus simple : *SQL Editor → New query*, collez tout le fichier `supabase/installation_complete.sql`
-(les 6 migrations réunies, sans données de démonstration) puis *Run*. Une seule fois, sur un projet vierge.
+(les 7 migrations réunies, sans données de démonstration) puis *Run*. Une seule fois, sur un projet vierge.
+
+> **Vous aviez déjà exécuté une version précédente de ce fichier (6 migrations) ?** N’exécutez PAS à nouveau le fichier
+> complet : exécutez seulement `supabase/migrations/20261010000700_corrections_audit.sql` (corrections de l’audit,
+> dont les privilèges indispensables aux projets Supabase récents).
 
 Option A — éditeur SQL, fichier par fichier : *SQL Editor → New query*, collez puis exécutez **dans l’ordre** chaque fichier de
 `supabase/migrations/` :
@@ -24,6 +28,11 @@ Option A — éditeur SQL, fichier par fichier : *SQL Editor → New query*, col
 4. `20261009000400_rls.sql`
 5. `20261009000500_stockage.sql`
 6. `20261009000600_site_public_et_rapports.sql`
+7. `20261010000700_corrections_audit.sql`
+
+> Les projets Supabase récents n’accordent plus automatiquement de privilèges sur les nouvelles tables aux rôles
+> `anon` et `authenticated`. La migration 7 les accorde explicitement (la sécurité reste assurée par RLS) :
+> sans elle, l’espace privé renverrait « permission denied ».
 
 Option B — CLI Supabase : `npx supabase link --project-ref <ref>` puis `npx supabase db push`.
 
@@ -52,20 +61,22 @@ Exécutez `supabase/seed.sql` dans l’éditeur SQL. **Ne pas le faire en produc
 
 ## 5. Créer le compte administrateur (sans mot de passe en dur)
 
-1. *Authentication → Users → Add user → Send invitation* avec l’adresse de l’administrateur.
-2. L’administrateur ouvre le courriel et choisit son mot de passe (12 caractères minimum conseillés).
-3. Dans *SQL Editor*, exécutez (en remplaçant l’adresse) :
+1. Vérifiez d’abord *Authentication → URL Configuration → Site URL* (étape 4) : le lien d’invitation y renvoie.
+2. *Authentication → Users → Add user → Send invitation* avec l’adresse de l’administrateur.
+3. L’administrateur ouvre le courriel : le lien ouvre la page **« Choisir votre mot de passe »** du site
+   (l’application reconnaît les liens d’invitation et de réinitialisation). 12 caractères minimum, lettres et chiffres.
+4. Dans *SQL Editor*, exécutez (en remplaçant l’adresse) :
 
    ```sql
    select public.promote_to_admin('adresse@exemple.com');
    ```
 
    Cette fonction n’est exécutable que depuis l’éditeur SQL (rôle `postgres`), jamais via l’API.
-4. Connectez-vous sur `/connexion`, puis ouvrez *Paramètres* pour saisir nom, coordonnées, WhatsApp, zones.
+5. Connectez-vous sur `/connexion`, puis ouvrez *Paramètres* pour saisir nom, coordonnées, WhatsApp, zones.
 
 ## 6. Ajouter des membres d’équipe
 
-Invitez-les comme à l’étape 5.1. Leur compte apparaît dans *Espace privé → Utilisateurs* **sans aucun accès** ;
+Invitez-les comme à l’étape 5.2. Leur compte apparaît dans *Espace privé → Utilisateurs* **sans aucun accès** ;
 l’administrateur choisit le rôle (Agent, Assistant, Comptable, Administrateur) puis l’active.
 
 ## 7. Récupérer les clés pour l’application
@@ -90,8 +101,22 @@ select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
 -- de rôle — can_*, has_role, is_admin, is_staff, current_app_role — et submit_inquiry)
 select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
  where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute');
+
+-- Les vues publiques sont en lecture seule (doit renvoyer false)
+select has_table_privilege('anon', 'public.public_agency_info', 'update');
+
+-- La fonction de promotion n'est pas appelable via l'API (doit renvoyer false)
+select has_function_privilege('anon', 'public.promote_to_admin(text)', 'execute');
+
+-- Un membre de l'équipe a bien accès aux tables (doit renvoyer true)
+select has_table_privilege('authenticated', 'public.properties', 'select');
 ```
 
 Lancez aussi *Advisors → Security Advisor*. Avertissement attendu : les vues `public_properties`,
 `public_property_photos` et `public_agency_info` sont signalées « security definer view » ;
-c’est voulu : elles n’exposent que les champs publics des biens publiés (voir SECURITE.md).
+c’est voulu : elles n’exposent que les champs publics des biens publiés et conformes (voir SECURITE.md).
+
+## 9. Réglage « Max rows » de l’API
+
+*Project Settings → Data API → Max rows* vaut 1000 par défaut. L’application lit les exports, rapports et le sitemap
+**par tranches de 1000** : laissez cette valeur (ne la baissez pas en dessous de 1000).

@@ -33,8 +33,11 @@ Prérequis : outils PostgreSQL (`pg_dump`, `pg_restore`) en version ≥ celle de
    unset SUPABASE_DB_URL
    ```
 
-3. Le script crée `sauvegardes/base-AAAAMMJJ-HHMMSS.dump` (droits 600, dossier exclu de Git) et **vérifie**
-   que le fichier est lisible et contient les données des biens. Sinon il affiche une erreur.
+3. Le script sauvegarde les schémas `public` (données métier), `private` (clé technique du formulaire anti-spam)
+   et `auth` (comptes), **avec les droits d’accès** (indispensables : sans eux, une restauration rendrait
+   certaines fonctions appelables par n’importe qui). Il crée `sauvegardes/base-AAAAMMJJ-HHMMSS.dump`
+   (droits 600, dossier exclu de Git) et **vérifie** que le fichier contient les données des biens, la clé
+   privée et les droits. Sinon il affiche une erreur.
 4. Copiez le fichier sur un support séparé (disque externe chiffré, stockage cloud privé de l’agence).
 
 ## Sauvegarder les fichiers
@@ -54,21 +57,32 @@ export TARGET_DB_URL='postgresql://postgres.<ref-cible>:<MOT_DE_PASSE>@<hôte>:5
 pg_restore --no-owner --clean --if-exists -d "$TARGET_DB_URL" sauvegardes/base-AAAAMMJJ-HHMMSS.dump
 ```
 
-Le message « schema "public" already exists » est attendu et sans conséquence.
-Puis vérifiez :
+Le message « schema "public" already exists » est attendu et sans conséquence. Sur un projet Supabase, des messages
+« already exists » peuvent aussi apparaître pour le schéma `auth` (créé par Supabase) : vérifiez ensuite que les
+comptes sont présents. Puis vérifiez :
 
 ```sql
 select count(*) from properties; select count(*) from owners; select count(*) from payments;
 select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
- where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;  -- doit être vide
+ where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;          -- doit être vide
+select has_function_privilege('anon', 'public.promote_to_admin(text)', 'execute');  -- doit renvoyer false
+select has_table_privilege('anon', 'public.public_agency_info', 'update');          -- doit renvoyer false
+select count(*) from private.app_secret;                                            -- doit renvoyer 1
 ```
+
+Les buckets et leurs règles d’accès (schéma `storage`) ne sont pas dans ce fichier : sur un projet neuf, exécutez
+d’abord `supabase/migrations/20261009000500_stockage.sql` si les buckets n’existent pas, puis restaurez les fichiers.
 
 et connectez-vous à l’application pointée sur ce projet.
 
-### Résultat du test réalisé (9 octobre 2026, base locale)
+### Résultat du test réalisé (11 octobre 2026, base locale)
 
-Sauvegarde de la base de test (données fictives) avec `scripts/backup.sh`, restauration dans une base vierge
-avec `pg_restore` : mêmes nombres de biens (6), propriétaires (3), journaux (28) ; RLS active et 74 politiques restaurées.
+Sauvegarde de la base de test (données fictives, 7 migrations) avec `scripts/backup.sh`, restauration dans une base
+vierge avec `pg_restore` : mêmes nombres de biens (6), propriétaires (3), journaux (32) et politiques (74) ;
+droits restaurés (promote_to_admin non appelable par un visiteur, vues en lecture seule, accès de l’équipe aux tables) ;
+clé privée restaurée et formulaire public fonctionnel après restauration.
+Le test du 9 octobre avait révélé un défaut corrigé depuis : la sauvegarde perdait les droits d’accès
+(et, après l’ajout du schéma `private`, n’incluait pas ce schéma).
 Ce test a été fait sur PostgreSQL 16 local, **pas encore sur un vrai projet Supabase** : à refaire lors de la
 mise en préproduction.
 

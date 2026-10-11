@@ -31,16 +31,25 @@ Choisissez la période en haut à droite. Cliquez une case pour ouvrir la liste 
    - *+ Mandat* : choisissez le statut *Actif* et la date de signature quand le mandat est signé.
 4. Après contrôle réel des documents : *Modifier* → *Statut de vérification : Vérifié*.
 5. Le cadre *Publication sur le site* liste ce qui manque. Quand tout est rempli : *Publier l’annonce*.
+   Un mandat ne compte que s’il est **signé et en cours de validité** : à son expiration, l’annonce disparaît du site
+   automatiquement et la fiche affiche « Annonce masquée du site ». Renouvelez le mandat pour la remettre en ligne.
    *Prévisualiser l’annonce* montre la page telle que les visiteurs la verront.
 6. *Dépublier* retire l’annonce du site sans rien effacer.
+
+La **référence** (ex. `BIEN-2026-00012`) est créée automatiquement. Vous pouvez saisir votre propre référence à la
+création (lettres, chiffres, tirets), sauf au format automatique, qui est réservé. Ensuite, seul l’administrateur peut la modifier.
 
 ## Traiter une demande
 
 Les demandes du site arrivent dans *Demandes* (statut « Nouveau »). Les messages WhatsApp ou appels
 ne sont **pas** importés automatiquement : enregistrez-les avec *+ Demande*.
 
-Sur la fiche d’une demande : *Prendre en charge*, puis *Créer un prospect* (ou *Rattacher à…* si la personne
-existe déjà), *Programmer une visite*, *Marquer traitée*, *Sans suite* ou *Indésirable*.
+Sur la fiche d’une demande : *Prendre en charge*, puis *Créer un prospect* (ou *Rattacher à…* : un prospect au même
+téléphone est proposé, et la liste permet de choisir n’importe quel prospect existant), *Programmer une visite*,
+*Marquer traitée*, *Sans suite* ou *Indésirable*.
+
+Pour une demande reçue par téléphone ou WhatsApp, ne cochez « La personne a donné son accord » que si elle l’a
+réellement exprimé : votre nom et la date sont enregistrés comme preuve.
 
 ## Suivre un prospect
 
@@ -48,10 +57,20 @@ Fiche prospect : budget, zones, types de biens, consentements. Vous y trouvez le
 l’historique des échanges (*+ Échange* après chaque appel), les visites, et une alerte si un **doublon** est possible.
 *+ Rappel* crée une tâche de relance.
 
+## Archiver ou effacer une personne
+
+- *Propriétaire* : bouton *Archiver* en bas de la fiche (masqué des listes, rien n’est perdu ; *Désarchiver* pour annuler).
+- *Prospect* : passez son statut à « Archivé ».
+- *Anonymiser (droit à l’effacement)*, réservé à l’administrateur : efface définitivement nom, coordonnées, notes
+  et textes des échanges, en gardant références et montants. Supprimez aussi ses documents confidentiels si besoin.
+
 ## Visites
 
 *Visites* affiche un calendrier par semaine (ou une liste). Après la visite : *Modifier* → statut *Effectuée*,
 compte rendu, niveau d’intérêt (1 à 5), objections, prochaine action. Bouton *PDF* pour la fiche de visite.
+
+Le **tableau de bord** affiche un cadre *Rappels* : mandats dont la date de rappel est atteinte ou qui expirent
+dans les 30 jours, et relances prévues après les visites.
 
 ## Négociation et vente
 
@@ -60,14 +79,21 @@ compte rendu, niveau d’intérêt (1 à 5), objections, prochaine action. Bouto
 3. *Modifier / changer le statut* au fil des étapes. « Offre acceptée sous conditions » **n’est pas** une vente.
 4. *Vente conclue* (prix convenu + date de conclusion obligatoires) : le bien est retiré du site, le mandat clôturé,
    et une **commission exigible** est créée dans les finances. Rien n’est effacé.
-5. *Annulée / Abandonnée* demande un motif ; le bien redevient publié s’il n’y a pas d’autre dossier.
+   Si aucune commission n’a été convenue, la commission **estimée** selon la règle choisie est créée « à confirmer ».
+   Les autres dossiers ouverts sur ce bien sont automatiquement annulés.
+5. *Annulée / Abandonnée* demande un motif ; le bien redevient publié (s’il remplit toujours les conditions)
+   lorsqu’il n’y a pas d’autre dossier.
+6. Un dossier clôturé ne se modifie plus (sauf ses notes). Seul l’administrateur peut le rouvrir ; s’il rouvre une
+   vente conclue, le bien redevient disponible et la commission non encaissée est annulée.
 
 ## Finances (administrateur, comptable)
 
 - *Recettes* : montant **attendu**. Les **encaissements** se saisissent sur la fiche de la recette
   (*+ Encaissement*, avec justificatif). Le solde et le statut (partiel / encaissé) se calculent seuls.
 - Une erreur ne s’efface pas : utilisez *Correction* (montant retiré + motif obligatoire).
-- *Dépenses* : date, catégorie, montant, mode de paiement, bien ou transaction liés.
+- *Dépenses* : date, catégorie, montant, mode de paiement, bien ou transaction liés. Après création, ouvrez la dépense
+  pour **joindre le justificatif** (PDF ou photo). Le mandat signé se joint de la même façon depuis le mandat.
+- Les montants peuvent être saisis « 150000 », « 150 000 » ou « 150.000 ».
 - *Règles de commission* : taux ou montant fixe **définis par l’agence** (pas des obligations légales).
 - *Finances* : rapport par période + PDF (rapport financier, relevé des commissions).
 

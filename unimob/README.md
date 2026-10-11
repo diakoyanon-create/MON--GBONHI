@@ -52,7 +52,8 @@ npm run dev                     # http://localhost:5173
 
 ```
 unimob/
-├── supabase/migrations/   Schéma SQL versionné, RLS, stockage, fonctions (6 migrations)
+├── supabase/migrations/   Schéma SQL versionné, RLS, stockage, fonctions (7 migrations)
+├── supabase/installation_complete.sql  Les 7 migrations en un seul fichier (généré)
 ├── supabase/seed.sql      Données de démonstration explicitement fictives
 ├── src/
 │   ├── api/               Accès aux données (PostgREST, RPC)
@@ -61,7 +62,7 @@ unimob/
 │   ├── resources/         Moteur générique listes/formulaires + configuration des modules
 │   ├── pages/admin/       Espace privé    ·  pages/public/  Site public
 │   └── lib/               Supabase, formats XOF / Africa/Abidjan, PDF, SEO, PWA
-├── functions/             Cloudflare Pages Function (sitemap.xml)
+├── functions/             Cloudflare Pages Functions (sitemap.xml, aperçus des fiches biens)
 ├── tests/unit|db|e2e/     Tests automatisés
 ├── scripts/               Réinitialisation base de test, sauvegarde
 └── docs/                  Guides
@@ -76,5 +77,6 @@ unimob/
 - [Guide d’utilisation (débutant)](docs/GUIDE_UTILISATEUR.md)
 - [Tests et rapport d’exécution](docs/TESTS.md)
 - [Rapport de sécurité](docs/SECURITE.md)
+- [Rapport d’audit et corrections](docs/AUDIT.md)
 - [Fonctionnalités, limites connues, prochaines étapes](docs/FONCTIONNALITES.md)
 - [Coûts possibles et services tiers](docs/COUTS.md)

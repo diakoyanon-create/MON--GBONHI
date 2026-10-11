@@ -24,8 +24,8 @@ explicite, mise en production uniquement après validation du propriétaire.
    |---|---|
    | `VITE_SUPABASE_URL` | URL du projet Supabase |
    | `VITE_SUPABASE_ANON_KEY` | clé publique « anon » |
-   | `VITE_SITE_URL` | URL du site |
-   | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | mêmes valeurs (utilisées par `functions/sitemap.xml.ts`) |
+   | `VITE_SITE_URL` | URL publique du site (ex. `https://agence.pages.dev`) — **lue au build** pour écrire l’URL absolue du sitemap dans `robots.txt` |
+   | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | mêmes valeurs que les deux premières (utilisées par les Pages Functions : sitemap et aperçus de partage) |
    | `NODE_VERSION` | `22` |
 
    Aucune autre variable n’est nécessaire. **Jamais** la clé `service_role`.
@@ -34,8 +34,11 @@ explicite, mise en production uniquement après validation du propriétaire.
 
 - `public/_redirects` : routage de l’application (toutes les URL → `index.html`).
 - `public/_headers` : en-têtes de sécurité (`nosniff`, `DENY` frames, HSTS), `noindex` + `no-store` sur `/admin`.
-- `public/robots.txt` : exclut `/admin`, `/connexion`, `/mot-de-passe`.
-- `functions/sitemap.xml.ts` : sitemap dynamique des annonces publiées (biens fictifs exclus).
+- `robots.txt` : généré au build (exclut `/admin`, `/connexion`, `/mot-de-passe` ; sitemap en URL absolue si `VITE_SITE_URL` est défini).
+- `functions/sitemap.xml.ts` : sitemap dynamique des annonces publiées (biens fictifs exclus), lu par tranches de 1000.
+- `functions/biens/[reference].ts` : sert chaque fiche bien avec son titre, sa description et sa photo dans le HTML,
+  pour que les aperçus WhatsApp/Facebook soient corrects (les robots de partage n’exécutent pas le JavaScript).
+  Après déploiement, vérifiez un lien avec l’outil de débogage de partage de Facebook.
 
 ## 4. Préproduction puis production
 

@@ -1,6 +1,7 @@
 # Tests et rapport d’exécution
 
-Tous les résultats ci-dessous ont été **réellement obtenus** le 9 octobre 2026 dans l’environnement de
+Tous les résultats ci-dessous ont été **réellement obtenus** (dernière exécution complète : 11 octobre 2026,
+après les corrections de l’audit) dans l’environnement de
 développement (Linux, Node 22, PostgreSQL 16.15, Chromium via Playwright 1.56). Aucune donnée personnelle réelle :
 uniquement des données fictives.
 
@@ -8,15 +9,16 @@ uniquement des données fictives.
 
 | Suite | Commande | Fichiers | Tests | Résultat |
 |---|---|---|---|---|
-| Unitaires (règles métier, composants) | `npm test` | 2 | 25 | ✅ 25/25 |
-| Base de données (RLS, contraintes, déclencheurs, finances) | `npm run test:db` | 4 | 92 | ✅ 92/92 |
-| Bout en bout (navigateur réel + API réelle) | `npm run test:e2e` | 3 | 21 | ✅ 21/21 |
+| Unitaires (règles métier, composants, corrections) | `npm test` | 3 | 42 | ✅ 42/42 |
+| Base de données (RLS, contraintes, déclencheurs, finances, corrections, privilèges stricts) | `npm run test:db` | 6 | 124 | ✅ 124/124 |
+| Bout en bout — projet Supabase récent (aucun privilège par défaut) | `npm run test:e2e` | 3 | 24 | ✅ 24/24 |
+| Bout en bout — ancien projet (privilèges par défaut larges) | `E2E_LEGACY_GRANTS=1 npm run test:e2e` | 3 | 24 | ✅ 24/24 |
 | Lint + types + build de production | `npm run lint`, `npm run typecheck`, `npm run build` | — | — | ✅ sans erreur |
 | Sauvegarde → restauration | `scripts/backup.sh` + `pg_restore` | — | — | ✅ (voir SAUVEGARDE.md) |
 
 ## Ce que couvre chaque suite
 
-### Base de données — `tests/db/` (92 tests)
+### Base de données — `tests/db/` (124 tests)
 
 Exécutée sur PostgreSQL avec un *shim* reproduisant Supabase (rôles `anon`/`authenticated`, `auth.uid()`,
 schéma `storage`) **et les privilèges par défaut larges de Supabase**, pour prouver que ce sont bien les
@@ -37,24 +39,40 @@ et le JWT d’un utilisateur, comme le ferait l’API.
   validations et tentatives d’injection ; champ piège anti-robot ; limitation de débit ; conversion en prospect ;
   visite liée au bien et au prospect ; offre acceptée ≠ vente ; vente conclue → bien retiré du catalogue,
   historique conservé, mandat clôturé, commission exigible créée ; abandon motivé ; réouverture réservée à l’admin.
+- `corrections.test.ts` (27) : non-régression des défauts de l’audit — vues en lecture seule, références
+  (format réservé, collision, modification admin), limite de débit sous envois **simultanés**, empreinte réseau
+  inaccessible, demande sur bien fictif, consentement tracé, mandat échu/futur refusé, annonce masquée quand le
+  mandat expire puis maintenance, annonce non conforme masquée, dates de publication non falsifiables, bien vendu
+  protégé, changement de propriétaire bloqué, vente : dossiers concurrents clos et commission estimée exigible,
+  dossier clôturé figé, réouverture (et refus si encaissé), abandon d’un bien réservé, recettes (annulation,
+  recalcul), cohérence du rapport financier, `created_by` non usurpable, courriel du profil, journal des rôles et
+  paramètres, `log_event` restreint, historique des statuts par rôle, anonymisation, superficie en hectares,
+  tableau de bord.
+- `grants-stricts.test.ts` (5) : base créée **sans aucun privilège par défaut** (comportement des projets Supabase
+  récents) — le site public, l’espace agent, le comptable et l’admin fonctionnent ; les fonctions sensibles restent
+  fermées. Un contrôle complémentaire a vérifié que, sans la migration 7, un agent recevait « permission denied ».
 - `finances.test.ts` (15) : encaissements partiels, solde, statut calculé ; dépassement refusé ; corrections
   négatives motivées, encaissements non modifiables/supprimables ; recettes non supprimables ; estimation de
   commission (%, minimum, forfait, arrondi) ; distinction estimée / convenue / exigible / encaissée / solde ;
   rapport financier cohérent avec les données sources ; tableau de bord du comptable ; tâches en retard.
 
-### Unitaires — `tests/unit/` (25 tests)
+### Unitaires — `tests/unit/` (42 tests)
 
 Formats XOF et fuseau Africa/Abidjan, conversion des dates, estimation de commission (identique à la base),
 liens WhatsApp, export CSV (neutralisation des formules Excel, colonnes sensibles interdites), contrôle des
 fichiers, validation du formulaire public, permissions par rôle, garde des routes privées, conversion des
 formulaires, nettoyage des recherches, robustesse des mots de passe, envoi du formulaire public.
+`corrections.test.ts` (17) : montants « 150.000 », champs masqués conservés, liens d’invitation, robots.txt,
+injection Open Graph (échappement HTML), descriptions, titres, recherche sans accents, PDF (caractères hors WinAnsi),
+configuration invalide, numéro de page, erreur de chargement après déploiement, refus d’envoyer une photo non réencodée.
 
-### Bout en bout — `tests/e2e/` (21 tests)
+### Bout en bout — `tests/e2e/` (24 tests)
 
 Pile locale : PostgreSQL + **GoTrue (Supabase Auth) 2.180** + **PostgREST 12.2** (les mêmes logiciels que Supabase)
 derrière un proxy `/auth/v1` et `/rest/v1`. Le **build de production** est servi et piloté dans Chromium.
 
-- `01-public.spec.ts` (7) : accueil, catalogue filtré, fiche bien sans données du propriétaire, bien non publié
+- `01-public.spec.ts` (10) — dont recherche sans accents, tri immédiat, page hors limites, bien fictif sans formulaire,
+  robots.txt avec sitemap absolu. : accueil, catalogue filtré, fiche bien sans données du propriétaire, bien non publié
   inaccessible, formulaire (erreurs puis envoi enregistré en base), **accès direct à l’API refusé** pour
   6 tables privées et pour l’écriture directe, SEO et `noindex`.
 - `02-admin.spec.ts` (10) : redirection vers la connexion, identifiants incorrects, compte sans rôle bloqué,
@@ -68,6 +86,8 @@ derrière un proxy `/auth/v1` et `/rest/v1`. Le **build de production** est serv
 
 ## Ce qui n’est PAS couvert automatiquement (limites honnêtes)
 
+- **Pages Functions Cloudflare** (aperçus Open Graph, sitemap) : la logique d’injection est testée en unitaire,
+  mais les fonctions elles-mêmes ne s’exécutent qu’après déploiement.
 - **Envoi réel de photos et documents** : l’API Storage de Supabase n’est pas émulée localement. Les politiques
   de stockage sont testées en SQL, la compression/validation côté navigateur en unitaire, mais le chargement
   complet doit être testé manuellement sur un projet Supabase (préproduction).
