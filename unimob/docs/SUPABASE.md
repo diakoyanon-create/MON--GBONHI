@@ -36,6 +36,18 @@ Option A — éditeur SQL, fichier par fichier : *SQL Editor → New query*, col
 
 Option B — CLI Supabase : `npx supabase link --project-ref <ref>` puis `npx supabase db push`.
 
+Option C — **installation par Claude** avec le connecteur Supabase (aucun mot de passe ni clé à transmettre) :
+
+1. Le propriétaire connecte le connecteur **Supabase** sur https://claude.ai/customize/connectors
+   (connexion à son compte Supabase, autorisation de l’organisation qui contient le projet).
+2. Il ouvre une **nouvelle** session Claude Code sur ce dépôt (les connecteurs sont lus au démarrage d’une session)
+   et demande l’installation de la base.
+3. Claude suit la procédure [ci-dessous](#procédure-pour-claude-connecteur-supabase).
+
+> **Attention à la traduction automatique du navigateur** (Chrome « Traduire cette page ») : elle transforme
+> `select` en « sélectionner » et peut abîmer le SQL copié depuis GitHub. Désactivez-la sur github.com et
+> supabase.com avant de copier ou d’exécuter du SQL (menu ⋮ → *Traduire…* → *Ne jamais traduire ce site*).
+
 Vérification : *Table Editor* doit afficher les tables (properties, owners…) avec le badge **RLS enabled**.
 *Storage* doit afficher 3 buckets : `property-photos` (public), `private-documents` (privé), `finance-receipts` (privé).
 
@@ -120,3 +132,37 @@ c’est voulu : elles n’exposent que les champs publics des biens publiés et 
 
 *Project Settings → Data API → Max rows* vaut 1000 par défaut. L’application lit les exports, rapports et le sitemap
 **par tranches de 1000** : laissez cette valeur (ne la baissez pas en dessous de 1000).
+
+## Procédure pour Claude (connecteur Supabase)
+
+À suivre par une session Claude Code dont le connecteur Supabase est actif. Les fichiers se trouvent sur la branche
+`claude/unimob-consulting-specs-pd1roi` (`git fetch origin claude/unimob-consulting-specs-pd1roi`, puis
+`git show origin/claude/unimob-consulting-specs-pd1roi:unimob/supabase/migrations/<fichier>`).
+
+Interdits : créer, mettre en pause, restaurer ou supprimer un projet ; confirmer un coût (`confirm_cost`) ; activer une
+option payante ; lire ou afficher la clé `service_role` ou le mot de passe de la base ; charger `seed.sql` sans accord
+explicite du propriétaire ; toucher à un projet autre que celui désigné par le propriétaire.
+
+1. `list_projects` : identifier le projet. S’il y en a plusieurs, demander lequel au propriétaire.
+2. Vérifier qu’il est vierge (`execute_sql`) :
+   ```sql
+   select (select count(*) from pg_tables where schemaname = 'public') as tables,
+          (select count(*) from storage.buckets) as buckets;
+   ```
+   Attendu : `0` et `0`. Si ce n’est pas le cas, s’arrêter et comparer avec `list_migrations` avant toute action.
+3. `apply_migration` pour **chacun** des fichiers de `supabase/migrations/`, dans l’ordre des noms, avec
+   `name` = nom du fichier sans `.sql` et `query` = contenu exact du fichier. S’arrêter à la première erreur et la
+   rapporter telle quelle (ne pas modifier le SQL sur le projet pour « faire passer »).
+4. Contrôles (`execute_sql`) — les résultats attendus sont entre parenthèses :
+   - la requête de l’étape 2 (`23` tables, `3` buckets) ;
+   - les contrôles de la section 8 ci-dessus (0 table sans RLS ; seules les fonctions de rôle et `submit_inquiry`
+     exécutables par `anon` ; `false`, `false`, `true`) ;
+   - `select count(*) from public.agency_settings;` (`1`).
+5. `get_advisors` (type `security`) : seules les alertes « security definer view » sur les trois vues publiques sont
+   attendues (documentées dans SECURITE.md). Rapporter toute autre alerte.
+6. Rapporter au propriétaire ce qui a été **réellement** vérifié, puis lui rappeler les réglages qu’il fait lui-même
+   dans le tableau de bord : section 4 (inscriptions désactivées, *Site URL*, *Redirect URLs*) et section 5
+   (invitation de l’administrateur). Après l’invitation, la promotion peut être faite par Claude :
+   `select public.promote_to_admin('adresse@exemple.com');` (adresse donnée par le propriétaire).
+7. Récupérer l’URL du projet et la clé publique `anon` (`get_project_url`, clé « anon » / *publishable*) pour le
+   déploiement Cloudflare Pages ; ce sont des valeurs publiques. Ne jamais récupérer ni écrire la clé `service_role`.
