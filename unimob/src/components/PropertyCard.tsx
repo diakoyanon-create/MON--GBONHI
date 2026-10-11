@@ -16,8 +16,11 @@ export function PropertyCard({ p }: { p: PublicProperty }) {
             <div className="flex h-full items-center justify-center text-sm text-ink-500">Photo à venir</div>
           )}
           <div className="absolute top-2 left-2 flex flex-wrap gap-1.5">
-            <span className="badge bg-ink-900/85 text-gold-300">{label(PUBLIC_STATUS, p.commercial_status)}</span>
-            {p.is_demo && <span className="badge bg-amber-100 text-amber-900">Exemple fictif</span>}
+            {p.is_demo ? (
+              <span className="badge bg-amber-100 text-amber-900">Exemple fictif</span>
+            ) : (
+              <span className="badge bg-ink-900/85 text-gold-300">{label(PUBLIC_STATUS, p.commercial_status)}</span>
+            )}
           </div>
         </div>
         <div className="p-4">
@@ -28,7 +31,7 @@ export function PropertyCard({ p }: { p: PublicProperty }) {
             <div className="text-lg font-semibold text-ink-900 tabular-nums">{formatXOF(p.price_xof)}</div>
             {p.area && <div className="text-sm text-ink-500">{formatNumber(p.area)} {label(AREA_UNITS, p.area_unit)}</div>}
           </div>
-          <div className="mt-2 font-mono text-[11px] text-ink-300">Réf. {p.reference}</div>
+          <div className="mt-2 font-mono text-xs text-ink-500">Réf. {p.reference}</div>
         </div>
       </Link>
     </article>

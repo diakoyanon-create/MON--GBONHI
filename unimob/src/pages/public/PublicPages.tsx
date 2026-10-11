@@ -1,13 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  CATALOG_PAGE_SIZE, fetchCatalog, fetchFeatured, fetchPublicCities, fetchPublicProperty, fetchSimilar, type CatalogFilters, type PublicProperty,
+  CATALOG_PAGE_SIZE, fetchCatalog, fetchFeatured, fetchPublicCities, fetchRecent, fetchPublicProperty, fetchSimilar, type CatalogFilters, type PublicProperty,
 } from '@/api/publicApi';
 import { usePublicAgency, useQuery } from '@/api/hooks';
 import { InquiryForm } from '@/components/InquiryForm';
 import { PropertyCard } from '@/components/PropertyCard';
 import { EmptyState, ErrorBox, Spinner } from '@/components/ui';
-import { AREA_UNITS, PROPERTY_TYPES, PUBLIC_STATUS, label, options } from '@/domain/labels';
+import { AREA_UNITS, PROPERTY_TYPES, PROPERTY_TYPES_PLURAL, PUBLIC_STATUS, label, options } from '@/domain/labels';
+import { propertyDescription } from '@/domain/propertyText';
 import { whatsappLink } from '@/domain/whatsapp';
 import { formatNumber, formatXOF } from '@/lib/format';
 import { photoUrl } from '@/lib/photos';
@@ -23,8 +24,12 @@ export function HomePage() {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [type, setType] = useState('');
-  const featured = useQuery(() => fetchFeatured(6), []);
-  useSeo({ title: agency?.agency_name ?? 'Agence immobilière', description: agency?.tagline ?? 'Biens immobiliers à vendre en Côte d’Ivoire.', siteName: undefined });
+  const lists = useQuery(async () => {
+    const featured = await fetchFeatured(6);
+    const recent = await fetchRecent(6, featured.map((p) => p.id));
+    return { featured, recent };
+  }, []);
+  useSeo({ title: agency?.agency_name ?? 'Agence immobilière', description: agency?.tagline ?? 'Biens immobiliers à vendre en Côte d’Ivoire.' });
 
   const search = (e: FormEvent) => {
     e.preventDefault();
@@ -33,7 +38,8 @@ export function HomePage() {
     if (type) p.set('type', type);
     navigate(`/biens?${p}`);
   };
-  const hasDemo = featured.data?.some((p) => p.is_demo);
+  const all = [...(lists.data?.featured ?? []), ...(lists.data?.recent ?? [])];
+  const hasDemo = all.some((p) => p.is_demo);
 
   return (
     <>
@@ -59,17 +65,29 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-12">
-        <div className="mb-6 flex items-end justify-between gap-4">
-          <h2 className="font-display text-2xl">Biens récents et à la une</h2>
-          <Link to="/biens" className="text-sm text-gold-700 underline">Voir tous les biens</Link>
-        </div>
-        {featured.loading ? <Spinner /> : featured.error ? <ErrorBox error="Le catalogue est momentanément indisponible." /> : !featured.data?.length ? (
+      <section className="mx-auto max-w-6xl space-y-10 px-4 py-12" aria-live="polite">
+        {lists.loading ? <Spinner /> : lists.error ? <ErrorBox error="Le catalogue est momentanément indisponible." /> : !all.length ? (
           <EmptyState>Aucun bien publié pour le moment.</EmptyState>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{featured.data.map((p) => <PropertyCard key={p.id} p={p} />)}</div>
+          <>
+            {lists.data!.featured.length > 0 && (
+              <div>
+                <h2 className="mb-6 font-display text-2xl">À la une</h2>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{lists.data!.featured.map((p) => <PropertyCard key={p.id} p={p} />)}</div>
+              </div>
+            )}
+            {lists.data!.recent.length > 0 && (
+              <div>
+                <div className="mb-6 flex items-end justify-between gap-4">
+                  <h2 className="font-display text-2xl">Récemment publiés</h2>
+                  <Link to="/biens" className="text-sm text-gold-700 underline">Voir tous les biens</Link>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{lists.data!.recent.map((p) => <PropertyCard key={p.id} p={p} />)}</div>
+              </div>
+            )}
+          </>
         )}
-        {hasDemo && <p className="mt-4 text-xs text-ink-500">{DEMO_NOTICE}</p>}
+        {hasDemo && <p className="text-xs text-ink-500">{DEMO_NOTICE}</p>}
       </section>
 
       {agency && (agency.zones_served?.length > 0 || agency.about) && (
@@ -115,12 +133,16 @@ export function CatalogPage() {
     minPrice: params.get('prix_min') ?? '', maxPrice: params.get('prix_max') ?? '', minArea: params.get('surface_min') ?? '',
     bedrooms: params.get('chambres') ?? '', q: params.get('q') ?? '', sort: (params.get('tri') as CatalogFilters['sort']) ?? 'recent',
   };
-  const page = Number(params.get('page') ?? 0);
+  const rawPage = Number(params.get('page'));
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 0;
   const [draft, setDraft] = useState(filters);
   useEffect(() => setDraft(filters), [params.toString()]); // eslint-disable-line react-hooks/exhaustive-deps
   const cities = useQuery(fetchPublicCities, []);
   const { data, error, loading } = useQuery(() => fetchCatalog(filters, page), [params.toString()]);
-  useSeo({ title: filters.type ? `${label(PROPERTY_TYPES, filters.type)}s à vendre` : 'Biens à vendre', description: 'Terrains, maisons, appartements et locaux commerciaux à vendre en Côte d’Ivoire. Prix en FCFA.' });
+  useSeo({
+    title: `${filters.type ? label(PROPERTY_TYPES_PLURAL, filters.type) : 'Biens'} à vendre${filters.city ? ` à ${filters.city}` : ''}`,
+    description: 'Terrains, maisons, appartements et locaux commerciaux à vendre en Côte d’Ivoire. Prix en FCFA.',
+  });
 
   const apply = (e?: FormEvent) => {
     e?.preventDefault();
@@ -160,7 +182,19 @@ export function CatalogPage() {
           <button className="btn-primary">Filtrer</button>
           <button type="button" className="btn-ghost" onClick={() => setParams(new URLSearchParams())}>Réinitialiser</button>
           <label className="ml-auto flex items-center gap-2 text-sm"><span>Trier</span>
-            <select className="input w-auto" value={draft.sort} onChange={(e) => { setD('sort', e.target.value); }} aria-label="Trier">
+            <select
+              className="input w-auto"
+              value={filters.sort}
+              aria-label="Trier"
+              onChange={(e) => {
+                // Le tri s'applique immédiatement aux filtres déjà validés.
+                const p = new URLSearchParams(params);
+                if (e.target.value === 'recent') p.delete('tri');
+                else p.set('tri', e.target.value);
+                p.delete('page');
+                setParams(p);
+              }}
+            >
               <option value="recent">Plus récents</option><option value="prix-asc">Prix croissant</option><option value="prix-desc">Prix décroissant</option>
             </select>
           </label>
@@ -168,7 +202,11 @@ export function CatalogPage() {
       </form>
       <div className="mt-6" aria-live="polite">
         {loading ? <Spinner /> : error ? <ErrorBox error="Le catalogue est momentanément indisponible." /> : !data?.rows.length ? (
-          <EmptyState>Aucun bien ne correspond à ces critères. <button className="underline" onClick={() => setParams(new URLSearchParams())}>Voir tous les biens</button></EmptyState>
+          page > 0 && (data?.count ?? 0) > 0 ? (
+            <EmptyState>Cette page n’existe plus. <button className="underline" onClick={() => { const p = new URLSearchParams(params); p.delete('page'); setParams(p); }}>Revenir à la première page</button></EmptyState>
+          ) : (
+            <EmptyState>Aucun bien ne correspond à ces critères. <button className="underline" onClick={() => setParams(new URLSearchParams())}>Voir tous les biens</button></EmptyState>
+          )
         ) : (
           <>
             <p className="mb-4 text-sm text-ink-500">{count} bien{count > 1 ? 's' : ''}</p>
@@ -207,7 +245,7 @@ export function PropertyView({ property: p, photos, preview }: { property: Publi
   const location = [p.district, p.city, p.region].filter(Boolean).join(', ');
   useSeo({
     title: `${p.title} — ${location}`,
-    description: `${label(PROPERTY_TYPES, p.property_type)} à vendre à ${location} : ${formatXOF(p.price_xof)}. Réf. ${p.reference}.`,
+    description: propertyDescription(p),
     image: photoUrl(photos[0]?.storage_path ?? p.primary_photo_path),
     noindex: preview || p.is_demo,
   });
@@ -238,8 +276,11 @@ export function PropertyView({ property: p, photos, preview }: { property: Publi
           )}
           <div className="mt-6">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="badge bg-ink-900 text-gold-300">{label(PUBLIC_STATUS, p.commercial_status) || 'Aperçu'}</span>
-              {p.is_demo && <span className="badge bg-amber-100 text-amber-900">Exemple fictif — non disponible</span>}
+              {p.is_demo ? (
+                <span className="badge bg-amber-100 text-amber-900">Exemple fictif — non disponible</span>
+              ) : (
+                <span className="badge bg-ink-900 text-gold-300">{label(PUBLIC_STATUS, p.commercial_status) || 'Aperçu'}</span>
+              )}
               <span className="font-mono text-xs text-ink-500">Réf. {p.reference}</span>
             </div>
             <h1 className="mt-3 font-display text-3xl">{p.title}</h1>
@@ -264,11 +305,20 @@ export function PropertyView({ property: p, photos, preview }: { property: Publi
           <div className="card p-5">
             <div className="text-2xl font-semibold tabular-nums">{formatXOF(p.price_xof)}</div>
             {p.negotiable && <div className="text-sm text-ink-500">Prix négociable</div>}
-            {wa && !p.is_demo && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn mt-4 w-full bg-[#1f8f4e] text-white hover:bg-[#177540]">Écrire sur WhatsApp</a>}
+            {wa && !p.is_demo && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn mt-4 w-full bg-[#177540] text-white hover:bg-[#11592f]">Écrire sur WhatsApp</a>}
           </div>
           <div className="card p-5">
             <h2 className="mb-3 font-semibold">Demande d’information</h2>
-            {preview ? <p className="text-sm text-ink-500">Formulaire désactivé en aperçu.</p> : <InquiryForm propertyReference={p.reference} compact />}
+            {preview ? (
+              <p className="text-sm text-ink-500">Formulaire désactivé en aperçu.</p>
+            ) : p.is_demo ? (
+              <p className="text-sm text-ink-700">
+                Ce bien est un exemple fictif. Consultez le <Link className="underline" to="/biens">catalogue</Link> ou{' '}
+                <Link className="underline" to="/contact">contactez-nous</Link> pour décrire votre recherche.
+              </p>
+            ) : (
+              <InquiryForm propertyReference={p.reference} compact />
+            )}
           </div>
         </aside>
       </div>
@@ -316,7 +366,7 @@ export function ContactPage() {
         {a?.phone && <p><strong>Téléphone</strong><br /><a className="underline" href={`tel:${a.phone.replace(/[^\d+]/g, '')}`}>{a.phone}</a></p>}
         {a?.email && <p><strong>Courriel</strong><br /><a className="underline" href={`mailto:${a.email}`}>{a.email}</a></p>}
         {a?.address && <p><strong>Adresse</strong><br />{a.address}</p>}
-        {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn w-full bg-[#1f8f4e] text-white">WhatsApp</a>}
+        {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="btn w-full bg-[#177540] text-white">WhatsApp</a>}
       </aside>
     </div>
   );

@@ -1,10 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { sql, state } from './helpers';
 
+// Un bien NON fictif est nécessaire pour tester le formulaire (désactivé sur les biens fictifs).
+test.beforeAll(async () => {
+  await sql(`update properties set is_demo = false, district = 'Angré' where reference = 'BIEN-2026-00002'`);
+});
+
 test.describe('Site public', () => {
   test('accueil : biens publiés, mention « fictif », pas de lien vers des données privées', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Biens récents et à la une' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'À la une' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Récemment publiés' })).toBeVisible();
+    await expect(page).toHaveTitle(/Mon Agence Immobilière \(démo\)/);
     const cards = page.locator('article');
     await expect(cards.first()).toBeVisible();
     await expect(page.getByText('Exemple fictif').first()).toBeVisible();
@@ -40,6 +47,36 @@ test.describe('Site public', () => {
     expect(body).not.toContain('00 00 00 00 02'); // téléphone du propriétaire
     // Le bouton WhatsApp flottant contient le numéro configuré
     await expect(page.getByRole('link', { name: 'Nous écrire sur WhatsApp' })).toHaveAttribute('href', /wa\.me\/2250000000000/);
+  });
+
+  test('recherche sans accents et tri immédiat', async ({ page }) => {
+    await page.goto('/biens');
+    await page.getByLabel('Recherche').fill('angre');
+    await page.getByRole('button', { name: 'Filtrer' }).click();
+    await expect(page.locator('article')).toHaveCount(1);
+    await expect(page.locator('article')).toContainText('Angré');
+
+    await page.goto('/biens');
+    await page.getByLabel('Trier').selectOption('prix-asc');
+    await expect(page).toHaveURL(/tri=prix-asc/);
+    const prices = (await page.locator('article .tabular-nums').allTextContents()).map((t) => Number(t.replace(/\D/g, '')));
+    expect(prices.length).toBeGreaterThan(1);
+    expect([...prices].sort((a, b) => a - b)).toEqual(prices);
+    await expect(page).toHaveTitle(/Biens à vendre \| /);
+  });
+
+  test('une page de catalogue hors limites propose de revenir au début', async ({ page }) => {
+    await page.goto('/biens?page=50');
+    await expect(page.getByText('Cette page n’existe plus.')).toBeVisible();
+    await page.getByRole('button', { name: 'Revenir à la première page' }).click();
+    await expect(page.locator('article').first()).toBeVisible();
+  });
+
+  test('bien fictif : pas de formulaire de demande ni de statut « Disponible »', async ({ page }) => {
+    await page.goto('/biens/BIEN-2026-00003');
+    await expect(page.getByText('Exemple fictif — non disponible')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Envoyer ma demande' })).toHaveCount(0);
+    await expect(page.getByText(/Ce bien est un exemple fictif/)).toBeVisible();
   });
 
   test('un bien non publié renvoie « plus en ligne »', async ({ page }) => {
@@ -86,6 +123,7 @@ test.describe('Site public', () => {
     await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', /Appartement/);
     const robots = await (await request.get('/robots.txt')).text();
     expect(robots).toContain('Disallow: /admin');
+    expect(robots).toContain('Sitemap: http://localhost:4173/sitemap.xml');
     await page.goto('/connexion');
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   });

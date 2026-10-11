@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { login } from './helpers';
+import { login, sql } from './helpers';
+
+test.beforeAll(async () => {
+  await sql(`update properties set is_demo = false where reference = 'BIEN-2026-00002'`);
+});
 
 // Parcours essentiels sur un téléphone Android (viewport Pixel 7, tactile).
 test.describe('Mobile Android', () => {
@@ -8,7 +12,7 @@ test.describe('Mobile Android', () => {
     await expect(page.locator('article').first()).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
-    await page.locator('article a').first().click();
+    await page.locator('article a', { hasText: 'Terrain 500' }).click();
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Envoyer ma demande' })).toBeVisible();
     const overflow2 = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

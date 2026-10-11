@@ -6,13 +6,15 @@ import { useAuth } from '@/auth/AuthContext';
 import { InteractionsPanel } from '@/components/InteractionsPanel';
 import { PrivateDocuments } from '@/components/PrivateDocuments';
 import { StatusHistory } from '@/components/StatusHistory';
-import { DefinitionList, ErrorBox, Modal, PageHeader, Section, Spinner, StatusBadge, humanError } from '@/components/ui';
+import { Badge, DefinitionList, ErrorBox, Modal, PageHeader, Section, Spinner, StatusBadge, humanError } from '@/components/ui';
+import { PersonalDataActions } from '@/components/PersonalDataActions';
 import {
   BUYER_STATUS, CONTACT_PREF, INQUIRY_SOURCE, INQUIRY_STATUS, MANDATE_STATUS, PROPERTY_STATUS, PROPERTY_TYPES, VERIFICATION_STATUS, VISIT_STATUS, label, options,
 } from '@/domain/labels';
 import { whatsappLink } from '@/domain/whatsapp';
 import { formatDate, formatDateTime, formatXOF, fullName } from '@/lib/format';
 import { ResourceForm } from '@/resources/ResourceForm';
+import { FieldInput } from '@/resources/FieldInput';
 import type { FieldDef } from '@/resources/types';
 import { REL } from '@/resources/configs';
 import { MiniList } from './PropertyDetailPage';
@@ -48,7 +50,7 @@ export function OwnerDetailPage() {
   const { can } = useAuth();
   const { data: settings } = useAgencySettings();
   const [check, setCheck] = useState<Row | null | 'new'>(null);
-  const { data: o, error, loading } = useQuery(() => getRow('owners', id), [id]);
+  const { data: o, error, loading, reload } = useQuery(() => getRow('owners', id), [id]);
   const rel = useQuery(async () => {
     const [props, mandates, checks] = await Promise.all([
       listRows('properties', { select: 'id, reference, title, commercial_status, price_xof', eq: { owner_id: id }, pageSize: 200 }),
@@ -60,12 +62,13 @@ export function OwnerDetailPage() {
 
   if (loading) return <Spinner />;
   if (error || !o) return <ErrorBox error={error ?? 'Propriétaire introuvable.'} />;
+  const ownerAnonymized = o.last_name === 'ANONYMISÉ';
 
   return (
     <div className="space-y-5">
       <PageHeader
         title={fullName(o)}
-        subtitle={<span className="flex flex-wrap items-center gap-2"><span className="font-mono">{o.reference}</span><StatusBadge value={o.verification_status} map={VERIFICATION_STATUS} /></span>}
+        subtitle={<span className="flex flex-wrap items-center gap-2"><span className="font-mono">{o.reference}</span><StatusBadge value={o.verification_status} map={VERIFICATION_STATUS} />{o.archived_at && <Badge>Archivé le {formatDate(o.archived_at)}</Badge>}</span>}
         actions={
           <>
             {can.sales && <Link className="btn-outline btn-sm" to={`/admin/proprietaires/${id}/modifier`}>Modifier</Link>}
@@ -108,6 +111,7 @@ export function OwnerDetailPage() {
           </Section>
           {can.sales && <PrivateDocuments ownerId={id} />}
           <InteractionsPanel ownerId={id} />
+          <PersonalDataActions kind="owner" id={id} archivedAt={o.archived_at} anonymized={ownerAnonymized} onDone={reload} />
         </div>
         <div className="space-y-5">
           <Section title="Biens">
@@ -142,7 +146,7 @@ export function BuyerDetailPage() {
   const { id = '' } = useParams();
   const { can } = useAuth();
   const { data: settings } = useAgencySettings();
-  const { data: b, error, loading } = useQuery(() => getRow('buyers', id), [id]);
+  const { data: b, error, loading, reload } = useQuery(() => getRow('buyers', id), [id]);
   const rel = useQuery(async () => {
     const [matches, visits, dups] = await Promise.all([
       rpc<Row[]>('property_matches', { p_buyer_id: id }),
@@ -197,7 +201,8 @@ export function BuyerDetailPage() {
             ]} />
             {b.notes && <p className="mt-4 text-sm whitespace-pre-line text-ink-700">{b.notes}</p>}
           </Section>
-          <InteractionsPanel buyerId={id} />
+          <InteractionsPanel buyerId={id} onChange={reload} />
+          <PersonalDataActions kind="buyer" id={id} anonymized={b.last_name === 'ANONYMISÉ'} onDone={reload} />
         </div>
         <div className="space-y-5">
           <Section title="Biens correspondant aux critères">
@@ -215,6 +220,7 @@ export function BuyerDetailPage() {
 
 // ---------------------------------------------------------------------------
 // Demande
+const ATTACH_FIELD: FieldDef = { name: 'attach_buyer', label: 'Rattacher à un autre prospect existant', type: 'relation', relation: REL.buyer };
 // ---------------------------------------------------------------------------
 export function InquiryDetailPage() {
   const { id = '' } = useParams();
@@ -222,6 +228,7 @@ export function InquiryDetailPage() {
   const { can } = useAuth();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attachTo, setAttachTo] = useState('');
   const { data: i, error, loading, reload } = useQuery(
     () => getRow('inquiries', id, '*, property:properties!inquiries_property_id_fkey(id, reference, title), buyer:buyers!inquiries_buyer_id_fkey(id, reference, last_name, first_names)'),
     [id],
@@ -285,6 +292,14 @@ export function InquiryDetailPage() {
             {i.status !== 'spam' && <button className="btn-ghost btn-sm text-red-700" disabled={busy} onClick={() => void run(() => updateRow('inquiries', id, { status: 'spam' }))}>Indésirable</button>}
           </div>
           {buyerDups.length > 0 && !i.buyer_id && <p className="mt-2 text-xs text-amber-800">Un prospect existant a le même téléphone ou courriel : préférez le rattachement.</p>}
+          {!i.buyer_id && (
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <FieldInput field={ATTACH_FIELD} value={attachTo} onChange={(v) => setAttachTo(String(v))} />
+              </div>
+              <button className="btn-outline" disabled={busy || !attachTo} onClick={() => void run(() => rpc('convert_inquiry_to_buyer', { p_inquiry_id: id, p_existing_buyer: attachTo }))}>Rattacher</button>
+            </div>
+          )}
           <ErrorBox error={err} />
         </Section>
       )}

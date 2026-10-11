@@ -14,10 +14,16 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
   const key = env.SUPABASE_ANON_KEY ?? env.VITE_SUPABASE_ANON_KEY;
   let items: Array<{ reference: string; published_at: string | null; is_demo: boolean }> = [];
   if (url && key) {
-    const r = await fetch(`${url}/rest/v1/public_properties?select=reference,published_at,is_demo&limit=5000`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    });
-    if (r.ok) items = await r.json();
+    // L'API renvoie au plus 1000 lignes par appel (« Max rows ») : lecture par pages.
+    for (let offset = 0; offset < 50_000; offset += 1000) {
+      const r = await fetch(`${url}/rest/v1/public_properties?select=reference,published_at,is_demo&order=reference&limit=1000&offset=${offset}`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (!r.ok) break;
+      const page = (await r.json()) as typeof items;
+      items = items.concat(page);
+      if (page.length < 1000) break;
+    }
   }
   const urls = [
     ...STATIC_PATHS.map((p) => `<url><loc>${xmlEscape(origin + p)}</loc></url>`),

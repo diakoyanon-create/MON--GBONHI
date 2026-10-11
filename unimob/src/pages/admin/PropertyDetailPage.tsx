@@ -79,10 +79,17 @@ export function PropertyDetailPage() {
         <Section title="Publication sur le site">
           {isPublic ? (
             <div className="space-y-3 text-sm">
-              <p>
-                L’annonce est <strong>en ligne</strong> depuis le {formatDateTime(p.published_at)}.{' '}
-                <Link className="text-gold-700 underline" to={`/biens/${p.reference}`} target="_blank">Voir sur le site</Link>
-              </p>
+              {blockers.data && blockers.data.length > 0 ? (
+                <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                  <strong>Annonce masquée du site :</strong> les conditions de publication ne sont plus remplies.
+                  <ul className="mt-1 list-inside list-disc">{blockers.data.map((b) => <li key={b}>{b}</li>)}</ul>
+                </div>
+              ) : (
+                <p>
+                  L’annonce est <strong>en ligne</strong> depuis le {formatDateTime(p.published_at)}.{' '}
+                  <Link className="text-gold-700 underline" to={`/biens/${p.reference}`} target="_blank">Voir sur le site</Link>
+                </p>
+              )}
               <button className="btn-outline btn-sm" disabled={busy} onClick={() => void setStatus('disponible')}>Dépublier (retirer du site)</button>
             </div>
           ) : (

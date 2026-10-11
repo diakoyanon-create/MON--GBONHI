@@ -85,7 +85,7 @@ test.describe('Parcours complet : du bien à la vente', () => {
     const reference = (await page.locator('header, div').getByText(/^BIEN-\d{4}-\d{5}$/).first().textContent())!;
     expect(reference).toMatch(/^BIEN-/);
     await expect(page.getByText('Le bien doit être vérifié')).toBeVisible();
-    await expect(page.getByText('Un mandat actif est requis')).toBeVisible();
+    await expect(page.getByText('Un mandat actif et en cours de validité est requis')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Publier l’annonce' })).toBeDisabled();
 
     // Un brouillon n'est pas visible publiquement
@@ -98,7 +98,7 @@ test.describe('Parcours complet : du bien à la vente', () => {
     await field(page, 'Statut de vérification').selectOption('verifie');
     await field(page, 'Statut commercial').selectOption('disponible');
     await page.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(page.getByText('Un mandat actif est requis')).toBeVisible();
+    await expect(page.getByText('Un mandat actif et en cours de validité est requis')).toBeVisible();
     await expect(page.getByText('Le bien doit être vérifié')).toHaveCount(0);
 
     // Mandat actif
@@ -158,6 +158,7 @@ test.describe('Parcours complet : du bien à la vente', () => {
     await field(page, 'Statut').selectOption('effectuee');
     await field(page, 'Compte rendu').fill('Visite concluante (test).');
     await page.getByRole('button', { name: 'Créer' }).click();
+    await expect(page).toHaveURL(/\/admin\/visites$/); // enregistrement terminé
     const [v] = await sql(`select v.scheduled_at, b.last_name from visits v join buyers b on b.id = v.buyer_id where v.property_id = $1`, [p.id]);
     expect(v.last_name).toBe('Kouadio');
     expect(new Date(v.scheduled_at).toISOString()).toBe('2026-10-20T10:00:00.000Z'); // heure d'Abidjan = UTC

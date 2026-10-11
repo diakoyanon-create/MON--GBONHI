@@ -1,5 +1,10 @@
 import { supabase } from '@/lib/supabase';
-import { sanitizeSearch } from './crud';
+import { isRangeError, sanitizeSearch } from './crud';
+
+/** Terme de recherche sans accents ni majuscules (comparé à search_text, déjà normalisé en base). */
+export function normalizeSearch(term: string): string {
+  return sanitizeSearch(term).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+}
 
 export type PublicProperty = {
   id: string;
@@ -39,33 +44,56 @@ export type CatalogFilters = {
 
 export const CATALOG_PAGE_SIZE = 12;
 
-export async function fetchCatalog(f: CatalogFilters, page = 0) {
+function catalogQuery(f: CatalogFilters) {
   let q = supabase.from('public_properties').select('*', { count: 'exact' });
   if (f.type) q = q.eq('property_type', f.type);
-  if (f.city) q = q.ilike('city', sanitizeSearch(f.city));
-  if (f.district) q = q.ilike('district', `*${sanitizeSearch(f.district)}*`);
+  if (f.city) q = q.eq('city', f.city);
+  const district = f.district ? normalizeSearch(f.district) : '';
+  if (district) q = q.ilike('district_search', `*${district}*`);
   if (f.minPrice && Number(f.minPrice) > 0) q = q.gte('price_xof', Number(f.minPrice));
   if (f.maxPrice && Number(f.maxPrice) > 0) q = q.lte('price_xof', Number(f.maxPrice));
   if (f.minArea && Number(f.minArea) > 0) q = q.gte('area', Number(f.minArea));
   if (f.bedrooms && Number(f.bedrooms) > 0) q = q.gte('bedrooms', Number(f.bedrooms));
-  const term = f.q ? sanitizeSearch(f.q) : '';
-  if (term) q = q.or(`title.ilike.*${term}*,reference.ilike.*${term}*,city.ilike.*${term}*,district.ilike.*${term}*`);
+  // Recherche insensible aux accents : « adjame » trouve « Adjamé ».
+  const term = f.q ? normalizeSearch(f.q) : '';
+  if (term) q = q.ilike('search_text', `*${term}*`);
   if (f.sort === 'prix-asc') q = q.order('price_xof', { ascending: true, nullsFirst: false });
   else if (f.sort === 'prix-desc') q = q.order('price_xof', { ascending: false, nullsFirst: false });
   else q = q.order('published_at', { ascending: false, nullsFirst: false });
-  q = q.range(page * CATALOG_PAGE_SIZE, page * CATALOG_PAGE_SIZE + CATALOG_PAGE_SIZE - 1);
-  const { data, error, count } = await q;
-  if (error) throw error;
+  return q;
+}
+
+/** Une page du catalogue ; une page au-delà du total renvoie une liste vide et le total réel. */
+export async function fetchCatalog(f: CatalogFilters, page = 0) {
+  const p = Number.isInteger(page) && page > 0 ? page : 0;
+  const { data, error, count } = await catalogQuery(f).range(p * CATALOG_PAGE_SIZE, p * CATALOG_PAGE_SIZE + CATALOG_PAGE_SIZE - 1);
+  if (error) {
+    if (isRangeError(error)) {
+      const { count: total } = await catalogQuery(f).range(0, 0);
+      return { rows: [] as PublicProperty[], count: total ?? 0 };
+    }
+    throw error;
+  }
   return { rows: (data ?? []) as PublicProperty[], count: count ?? 0 };
 }
 
+/** Biens mis en avant par l'agence. */
 export async function fetchFeatured(limit = 6) {
   const { data, error } = await supabase
     .from('public_properties')
     .select('*')
-    .order('is_featured', { ascending: false })
+    .eq('is_featured', true)
     .order('published_at', { ascending: false, nullsFirst: false })
     .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as PublicProperty[];
+}
+
+/** Biens les plus récemment publiés (hors ceux déjà affichés « à la une »). */
+export async function fetchRecent(limit = 6, excludeIds: string[] = []) {
+  let q = supabase.from('public_properties').select('*').order('published_at', { ascending: false, nullsFirst: false }).limit(limit);
+  if (excludeIds.length) q = q.not('id', 'in', `(${excludeIds.join(',')})`);
+  const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as PublicProperty[];
 }
@@ -95,7 +123,7 @@ export async function fetchSimilar(p: PublicProperty, limit = 3) {
 }
 
 export async function fetchPublicCities(): Promise<string[]> {
-  const { data } = await supabase.from('public_properties').select('city').limit(1000);
+  const { data } = await supabase.from('public_properties').select('city').order('city').limit(1000);
   return [...new Set((data ?? []).map((r: { city: string }) => r.city))].sort((a, b) => a.localeCompare(b, 'fr'));
 }
 

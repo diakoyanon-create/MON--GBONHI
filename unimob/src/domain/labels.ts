@@ -11,6 +11,11 @@ export const PROPERTY_STATUS: Record<string, string> = {
   brouillon: 'Brouillon', a_verifier: 'À vérifier', disponible: 'Disponible', publie: 'Publié',
   sous_negociation: 'Sous négociation', reserve: 'Réservé', vendu: 'Vendu', retire: 'Retiré', archive: 'Archivé',
 };
+/** Pluriels pour les titres (« Locaux commerciaux à vendre »). */
+export const PROPERTY_TYPES_PLURAL: Record<string, string> = {
+  terrain: 'Terrains', maison: 'Maisons', appartement: 'Appartements', immeuble: 'Immeubles',
+  local_commercial: 'Locaux commerciaux', autre: 'Autres biens',
+};
 /** Libellé affiché au public (jamais « Publié »). */
 export const PUBLIC_STATUS: Record<string, string> = {
   publie: 'Disponible', sous_negociation: 'Sous offre', reserve: 'Réservé',

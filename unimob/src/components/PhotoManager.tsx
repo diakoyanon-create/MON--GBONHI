@@ -28,7 +28,13 @@ export function PhotoManager({ propertyId, editable, onChange }: { propertyId: s
     let position = photos.length ? Math.max(...photos.map((p) => p.position)) + 1 : 0;
     for (const [i, original] of list.entries()) {
       setProgress(`Envoi ${i + 1} / ${list.length}…`);
-      const file = await compressImage(original);
+      let file: File;
+      try {
+        file = await compressImage(original);
+      } catch (e) {
+        setError(`${original.name} : ${(e as Error).message}`);
+        continue;
+      }
       const problem = validateFile(file, 'photo');
       if (problem) {
         setError(`${original.name} : ${problem}`);
@@ -84,8 +90,8 @@ export function PhotoManager({ propertyId, editable, onChange }: { propertyId: s
       actions={
         editable && (
           <>
-            <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" id="photo-upload" onChange={(e) => void upload(e.target.files)} />
-            <label htmlFor="photo-upload" className="btn-outline btn-sm cursor-pointer">+ Ajouter des photos</label>
+            <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" multiple className="peer sr-only" id="photo-upload" onChange={(e) => void upload(e.target.files)} />
+            <label htmlFor="photo-upload" className="btn-outline btn-sm cursor-pointer has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-gold-700 peer-focus-visible:outline-2 peer-focus-visible:outline-gold-700">+ Ajouter des photos</label>
           </>
         )
       }

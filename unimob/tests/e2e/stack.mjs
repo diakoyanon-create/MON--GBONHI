@@ -104,9 +104,16 @@ export async function startStack() {
   await waitFor(`http://127.0.0.1:${PORTS.auth}/health`, 'GoTrue');
 
   // 3. Shim (stockage, privilèges par défaut) + migrations + données fictives
+  // Par défaut, comme un projet Supabase récent : aucun privilège accordé automatiquement
+  // (E2E_LEGACY_GRANTS=1 pour simuler un ancien projet aux privilèges par défaut larges).
+  const legacy = process.env.E2E_LEGACY_GRANTS === '1';
   for (const f of ['tests/db/supabase-shim.sql', ...readdirSync(join(root, 'supabase/migrations')).sort().map((f) => `supabase/migrations/${f}`), 'supabase/seed.sql']) {
     try {
-      await c.query(readFileSync(join(root, f), 'utf8'));
+      let sqlText = readFileSync(join(root, f), 'utf8');
+      if (f.endsWith('supabase-shim.sql') && !legacy) {
+        sqlText = sqlText.replace(/^alter default privileges.*$/gm, '') + '\nalter default privileges in schema public revoke execute on functions from public;\n';
+      }
+      await c.query(sqlText);
     } catch (e) {
       throw new Error(`${f}: ${e.message}`);
     }

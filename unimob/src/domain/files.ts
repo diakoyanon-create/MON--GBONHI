@@ -32,23 +32,31 @@ export function storagePath(folder: string, mime: string, id: string = crypto.ra
 }
 
 /**
- * Réduit une photo (max 1600 px, JPEG ~82 %) pour les connexions mobiles.
- * Retourne le fichier d'origine si le navigateur ne sait pas le faire.
+ * Réencode TOUJOURS la photo (max 1600 px, JPEG ~82 %) : réduit le poids pour les connexions
+ * mobiles et supprime les métadonnées EXIF (dont la position GPS) avant publication.
+ * Si le navigateur ne sait pas réencoder, l'envoi est refusé plutôt que de publier l'original.
  */
 export async function compressImage(file: File, maxSize = 1600, quality = 0.82): Promise<File> {
-  if (!file.type.startsWith('image/') || typeof createImageBitmap !== 'function') return file;
-  try {
-    const bmp = await createImageBitmap(file);
-    const scale = Math.min(1, maxSize / Math.max(bmp.width, bmp.height));
-    if (scale === 1 && file.size < 600 * 1024) return file;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bmp.width * scale);
-    canvas.height = Math.round(bmp.height * scale);
-    canvas.getContext('2d')?.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', quality));
-    if (!blob || blob.size >= file.size) return file;
-    return new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
-  } catch {
-    return file;
+  if (!file.type.startsWith('image/')) return file;
+  if (typeof createImageBitmap !== 'function') {
+    throw new Error('Votre navigateur ne permet pas de préparer la photo. Mettez-le à jour puis réessayez.');
   }
+  let bmp: ImageBitmap;
+  try {
+    bmp = await createImageBitmap(file);
+  } catch {
+    throw new Error('Image illisible ou format non pris en charge.');
+  }
+  const scale = Math.min(1, maxSize / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Préparation de la photo impossible sur cet appareil.');
+  ctx.fillStyle = '#ffffff'; // fond blanc pour les PNG transparents
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', quality));
+  if (!blob) throw new Error('Préparation de la photo impossible sur cet appareil.');
+  return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
 }

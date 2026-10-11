@@ -22,7 +22,7 @@
 @layer base {
   html { -webkit-text-size-adjust: 100%; }
   body { @apply bg-cream text-ink-900 antialiased; }
-  :focus-visible { @apply outline-2 outline-offset-2 outline-gold-500; }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-gold-700; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   }
@@ -38,7 +38,7 @@
 @utility btn-danger { @apply btn bg-red-700 text-white hover:bg-red-800; }
 @utility btn-sm { @apply min-h-9 px-3 py-1.5 text-xs; }
 @utility input {
-  @apply block min-h-11 w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-base text-ink-900 placeholder:text-ink-300 focus:border-gold-500 focus:ring-2 focus:ring-gold-300 focus:outline-none sm:text-sm;
+  @apply block min-h-11 w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-base text-ink-900 placeholder:text-ink-500 focus:border-gold-700 focus:ring-2 focus:ring-gold-700 focus:outline-none sm:text-sm;
 }
 @utility label { @apply mb-1 block text-sm font-medium text-ink-700; }
 @utility card { @apply rounded-xl border border-ink-100 bg-white shadow-sm; }

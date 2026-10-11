@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { usePublicAgency } from '@/api/hooks';
 import { whatsappLink } from '@/domain/whatsapp';
 
@@ -14,7 +14,14 @@ export function PublicLayout() {
   const { data: agency } = usePublicAgency();
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const navType = useNavigationType();
   useEffect(() => setOpen(false), [location.pathname]);
+  // Nouvelle page : retour en haut et focus sur le contenu (sauf retour arrière, qui garde la position).
+  useEffect(() => {
+    if (navType === 'POP') return;
+    window.scrollTo(0, 0);
+    document.getElementById('contenu')?.focus({ preventScroll: true });
+  }, [location.pathname, navType]);
   const wa = whatsappLink(agency?.whatsapp_number, null);
 
   return (
@@ -47,7 +54,7 @@ export function PublicLayout() {
           </nav>
         )}
       </header>
-      <main id="contenu" className="flex-1">
+      <main id="contenu" tabIndex={-1} className="flex-1 focus:outline-none">
         <Outlet />
       </main>
       <footer className="bg-ink-950 text-ink-300">
@@ -74,7 +81,7 @@ export function PublicLayout() {
         <div className="border-t border-ink-800 py-4 text-center text-xs">© {new Date().getFullYear()} {agency?.agency_name} · Prix en francs CFA (XOF)</div>
       </footer>
       {wa && (
-        <a href={wa} target="_blank" rel="noopener noreferrer" className="fixed right-4 bottom-4 z-40 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#1f8f4e] px-4 text-sm font-semibold text-white shadow-lg hover:bg-[#177540]" aria-label="Nous écrire sur WhatsApp">
+        <a href={wa} target="_blank" rel="noopener noreferrer" className="fixed right-4 bottom-4 z-40 inline-flex min-h-12 items-center gap-2 rounded-full bg-[#177540] px-4 text-sm font-semibold text-white shadow-lg hover:bg-[#11592f]" aria-label="Nous écrire sur WhatsApp">
           WhatsApp
         </a>
       )}
