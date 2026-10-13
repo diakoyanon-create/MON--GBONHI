@@ -20,6 +20,14 @@ export function pageFromParam(v: string | null): number {
 /** Montant entier positif lu depuis l'URL (sinon ignoré). */
 const amountParam = (v: string | null) => (v && /^\d+$/.test(v) ? v : '');
 
+/** Date AAAA-MM-JJ, ou instant UTC complet (liens du tableau de bord), lue depuis l'URL (sinon ignorée). */
+export function dateParam(v: string | null): string {
+  if (!v || !/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z)?$/.test(v)) return '';
+  // Date.parse accepte le 30 février : le jour doit se relire à l'identique.
+  const t = Date.parse(v);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === v.slice(0, 10) ? v : '';
+}
+
 export function ResourceList({ config }: { config: ResourceConfig }) {
   const { can } = useAuth();
   const navigate = useNavigate();
@@ -33,6 +41,7 @@ export function ResourceList({ config }: { config: ResourceConfig }) {
     ...(config.rangeFilters ?? []).flatMap((r) => [`${r.name}_min`, `${r.name}_max`]),
     ...(config.coverFilter ? [config.coverFilter.param] : []),
   ];
+  const dateKeys = (config.rangeFilters ?? []).filter((r) => r.type === 'date').flatMap((r) => [`${r.name}_min`, `${r.name}_max`]);
   const [rangeDraft, setRangeDraft] = useState<Record<string, string>>({});
   const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -53,10 +62,12 @@ export function ResourceList({ config }: { config: ResourceConfig }) {
   const gte: Record<string, string> = {};
   const lte: Record<string, string> = {};
   for (const r of config.rangeFilters ?? []) {
-    const min = amountParam(params.get(`${r.name}_min`));
-    const max = amountParam(params.get(`${r.name}_max`));
+    const parse = r.type === 'date' ? dateParam : amountParam;
+    const min = parse(params.get(`${r.name}_min`));
+    const max = parse(params.get(`${r.name}_max`));
     if (min) gte[r.name] = min;
-    if (max) lte[r.name] = max;
+    // Date seule : le jour « au » est inclus (fin de journée, heure d'Abidjan = UTC).
+    if (max) lte[r.name] = r.type === 'date' && max.length === 10 ? `${max}T23:59:59.999Z` : max;
   }
   const orFilters: string[] = [];
   const cover = config.coverFilter ? amountParam(params.get(config.coverFilter.param)) : '';
@@ -182,20 +193,27 @@ export function ResourceList({ config }: { config: ResourceConfig }) {
       {rangeKeys.length > 0 && (
         <form
           className="mb-4 flex flex-wrap items-end gap-2"
-          aria-label="Filtres de montant"
+          aria-label={dateKeys.length === rangeKeys.length ? 'Filtres de date' : dateKeys.length ? 'Filtres de montant et de date' : 'Filtres de montant'}
           onSubmit={(e) => {
             e.preventDefault();
-            update(Object.fromEntries(rangeKeys.map((k) => [k, (rangeDraft[k] ?? '').replace(/\D/g, '')])));
+            update(Object.fromEntries(rangeKeys.map((k) => [k, dateKeys.includes(k) ? dateParam(rangeDraft[k] ?? '') : (rangeDraft[k] ?? '').replace(/\D/g, '')])));
           }}
         >
           {(config.rangeFilters ?? []).map((r) => (
             <div key={r.name} className="flex gap-2">
-              <label className="flex flex-col text-xs text-ink-500">{r.label} min.
-                <input className="input w-36" inputMode="numeric" value={rangeDraft[`${r.name}_min`] ?? ''} onChange={(e) => setRangeDraft((d) => ({ ...d, [`${r.name}_min`]: e.target.value }))} />
-              </label>
-              <label className="flex flex-col text-xs text-ink-500">{r.label} max.
-                <input className="input w-36" inputMode="numeric" value={rangeDraft[`${r.name}_max`] ?? ''} onChange={(e) => setRangeDraft((d) => ({ ...d, [`${r.name}_max`]: e.target.value }))} />
-              </label>
+              {(['min', 'max'] as const).map((b) => {
+                const k = `${r.name}_${b}`;
+                return r.type === 'date' ? (
+                  // Un instant précis (lien du tableau de bord) est conservé tant que la date n'est pas modifiée.
+                  <label key={k} className="flex flex-col text-xs text-ink-500">{r.label} {b === 'min' ? 'du' : 'au'}
+                    <input className="input w-40" type="date" value={(rangeDraft[k] ?? '').slice(0, 10)} onChange={(e) => setRangeDraft((d) => ({ ...d, [k]: e.target.value }))} />
+                  </label>
+                ) : (
+                  <label key={k} className="flex flex-col text-xs text-ink-500">{r.label} {b === 'min' ? 'min.' : 'max.'}
+                    <input className="input w-36" inputMode="numeric" value={rangeDraft[k] ?? ''} onChange={(e) => setRangeDraft((d) => ({ ...d, [k]: e.target.value }))} />
+                  </label>
+                );
+              })}
             </div>
           ))}
           {config.coverFilter && (

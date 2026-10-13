@@ -1,9 +1,39 @@
 import { supabase } from '@/lib/supabase';
 import { isRangeError, sanitizeSearch } from './crud';
 
-/** Terme de recherche sans accents ni majuscules (comparé à search_text, déjà normalisé en base). */
+/**
+ * Équivalences d'extensions.unaccent (PostgreSQL 16, relevées en base) pour les caractères que
+ * la décomposition NFD ne traite pas : ligatures, lettres barrées, symboles Latin-1, ponctuation
+ * typographique (apostrophe ’ des claviers mobiles, guillemets « », tirets, points de suspension).
+ * Latin-1, Latin étendu A (U+00A0 à U+017F) et ponctuation (U+2010 à U+203A) donnent ainsi
+ * exactement le même résultat qu'en base.
+ */
+const UNACCENT: Record<string, string> = {
+  œ: 'oe', Œ: 'OE', æ: 'ae', Æ: 'AE', ß: 'ss', ẞ: 'SS', ø: 'o', Ø: 'O', ð: 'd', Ð: 'D', þ: 'th', Þ: 'TH',
+  đ: 'd', Đ: 'D', ħ: 'h', Ħ: 'H', ı: 'i', ĳ: 'ij', Ĳ: 'IJ', ĸ: 'q', ŀ: 'l', Ŀ: 'L', ł: 'l', Ł: 'L', ŉ: "'n",
+  ŋ: 'n', Ŋ: 'N', ŧ: 't', Ŧ: 'T', ſ: 's',
+  '¡': '!', '¿': '?', '©': '(C)', '®': '(R)', '±': '+/-', '¼': '1/4', '½': '1/2', '¾': '3/4', '×': '*', '÷': '/', '\u00ad': '-',
+  '’': "'", '‘': "'", '‛': "'", 'ʼ': "'", 'ʻ': "'", '′': "'", '‚': ',', '“': '"', '”': '"', '‟': '"', '″': '"', '„': ',,',
+  '«': '<<', '»': '>>', '‹': '<', '›': '>',
+  '‐': '-', '‑': '-', '‒': '-', '–': '-', '—': '-', '―': '-', '−': '-', '…': '...', '‥': '..', '․': '.', '‖': '||',
+};
+const UNACCENT_RE = new RegExp(`[${Object.keys(UNACCENT).join('')}]`, 'g');
+
+/**
+ * Équivalent de lower(extensions.unaccent(t)) en base : accents retirés (NFD puis marques
+ * combinantes), puis table ci-dessus, puis minuscules. « Cœur d’Angré » → « coeur d'angre ».
+ */
+export function unaccentLower(t: string): string {
+  return t.normalize('NFD').replace(/\p{M}/gu, '').replace(UNACCENT_RE, (c) => UNACCENT[c]).toLowerCase();
+}
+
+/**
+ * Terme de recherche normalisé comme search_text et district_search en base
+ * (lower(extensions.unaccent(…))), puis débarrassé des caractères spéciaux de PostgREST.
+ * L'ordre compte : « × » devient « * », qui doit encore être neutralisé.
+ */
 export function normalizeSearch(term: string): string {
-  return sanitizeSearch(term).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return sanitizeSearch(unaccentLower(term));
 }
 
 export type PublicProperty = {
@@ -43,6 +73,24 @@ export type CatalogFilters = {
 };
 
 export const CATALOG_PAGE_SIZE = 12;
+
+const CATALOG_PARAMS: Array<[keyof CatalogFilters, string]> = [
+  ['type', 'type'], ['city', 'ville'], ['district', 'quartier'], ['minPrice', 'prix_min'], ['maxPrice', 'prix_max'],
+  ['minArea', 'surface_min'], ['bedrooms', 'chambres'], ['q', 'q'], ['sort', 'tri'],
+];
+
+/**
+ * Paramètres d'URL du catalogue à partir des filtres saisis, utilisés par « Filtrer » et par
+ * le changement de tri (qui applique ainsi aussi les filtres saisis). Sans « page » : retour en page 1.
+ */
+export function catalogParams(f: CatalogFilters): URLSearchParams {
+  const p = new URLSearchParams();
+  for (const [k, name] of CATALOG_PARAMS) {
+    const val = f[k];
+    if (val && !(k === 'sort' && val === 'recent')) p.set(name, String(val));
+  }
+  return p;
+}
 
 function catalogQuery(f: CatalogFilters) {
   let q = supabase.from('public_properties').select('*', { count: 'exact' });

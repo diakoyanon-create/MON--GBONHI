@@ -28,6 +28,24 @@ export type DashboardStats = {
   >;
 };
 
+/** Prospects actifs : miroir de dashboard_stats (status not in converti, sans_suite, archive). */
+export const ACTIVE_BUYER_STATUSES = ['nouveau', 'a_contacter', 'contact_etabli', 'besoin_qualifie', 'visite_programmee', 'en_negociation'];
+
+/**
+ * Liens des tuiles : la liste ouverte reprend exactement le filtre du compteur (dashboard_stats).
+ * `at` : instant du calcul (visites à venir, tâches en retard).
+ */
+export function tileLinks(period: { from: string; to: string }, at: string) {
+  return {
+    prospects: `/admin/acheteurs?status=${ACTIVE_BUYER_STATUSES.join(',')}`,
+    visitsUpcoming: `/admin/visites?vue=liste&status=a_confirmer,confirmee&scheduled_at_min=${at}`,
+    transactionsOpen: '/admin/transactions?status=negociation,offre_en_attente,offre_acceptee_sous_conditions,dossier_en_cours',
+    sales: `/admin/transactions?status=vente_conclue&concluded_date_min=${period.from}&concluded_date_max=${period.to}`,
+    tasksOverdue: `/admin/taches?status=a_faire,en_cours,reportee&due_at_max=${at}`,
+    commissionsDue: '/admin/finances/recettes?status=exigible,partiel&entry_type=commission',
+  };
+}
+
 function monthStart() {
   return `${todayISO().slice(0, 8)}01`;
 }
@@ -45,10 +63,11 @@ export function DashboardPage() {
   // Maintenance quotidienne : mandats échus → « Expiré », annonces non conformes dépubliées.
   const maintenance = useQuery(() => rpc<{ mandates_expired: number; properties_unpublished: number }>('run_maintenance').catch(() => null), []);
   const { data: s, error, loading } = useQuery(
-    () => rpc<DashboardStats>('dashboard_stats', { p_from: from, p_to: to }),
+    () => rpc<DashboardStats>('dashboard_stats', { p_from: from, p_to: to }).then((st) => ({ ...st, at: new Date().toISOString() })),
     [from, to, maintenance.data?.mandates_expired, maintenance.data?.properties_unpublished],
   );
   const today = todayISO();
+  const links = s ? tileLinks(s.period, s.at) : null;
   const visits = useQuery(
     () => (can.sales
       ? listRows('visits', {
@@ -127,12 +146,12 @@ export function DashboardPage() {
             <h2 id="h-com" className="mb-2 text-sm font-semibold text-ink-700">Activité commerciale</h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {s.owners !== undefined && <Stat label="Propriétaires" value={s.owners} to="/admin/proprietaires" />}
-              {s.prospects !== undefined && <Stat label="Prospects actifs" value={s.prospects} hint={s.follow_ups_due ? `${s.follow_ups_due} relance(s) dues` : undefined} to="/admin/acheteurs" />}
+              {s.prospects !== undefined && <Stat label="Prospects actifs" value={s.prospects} hint={s.follow_ups_due ? `${s.follow_ups_due} relance(s) dues` : undefined} to={links?.prospects} />}
               {s.inquiries_new !== undefined && <Stat label="Demandes non traitées" value={s.inquiries_new} to="/admin/demandes?status=nouveau" />}
-              {s.visits_upcoming !== undefined && <Stat label="Visites à venir" value={s.visits_upcoming} to="/admin/visites" />}
-              {s.transactions_open !== undefined && <Stat label="Négociations / dossiers en cours" value={s.transactions_open} hint={s.negotiations_pending ? `${s.negotiations_pending} offre(s) en attente` : undefined} to="/admin/transactions?status=negociation,offre_en_attente,offre_acceptee_sous_conditions,dossier_en_cours" />}
-              {s.sales && <Stat label="Ventes conclues (période)" value={s.sales.count} hint={`Montant des ventes : ${formatXOF(s.sales.volume)}`} to="/admin/transactions?status=vente_conclue" />}
-              <Stat label="Tâches en retard" value={<span className={s.tasks_overdue ? 'text-red-700' : ''}>{s.tasks_overdue}</span>} hint={`${s.tasks_today} pour aujourd’hui`} to="/admin/taches" />
+              {s.visits_upcoming !== undefined && <Stat label="Visites à venir" value={s.visits_upcoming} to={links?.visitsUpcoming} />}
+              {s.transactions_open !== undefined && <Stat label="Négociations / dossiers en cours" value={s.transactions_open} hint={s.negotiations_pending ? `${s.negotiations_pending} offre(s) en attente` : undefined} to={links?.transactionsOpen} />}
+              {s.sales && <Stat label="Ventes conclues (période)" value={s.sales.count} hint={`Montant des ventes : ${formatXOF(s.sales.volume)}`} to={links?.sales} />}
+              <Stat label="Tâches en retard" value={<span className={s.tasks_overdue ? 'text-red-700' : ''}>{s.tasks_overdue}</span>} hint={`${s.tasks_today} pour aujourd’hui`} to={links?.tasksOverdue} />
               {s.mandate_reminders !== undefined && <Stat label="Rappels mandats" value={s.mandate_reminders} hint="Rappel dû ou expiration sous 30 jours (voir « Rappels »)" />}
             </div>
           </section>
@@ -151,7 +170,7 @@ export function DashboardPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                 <Stat label="Commissions estimées" value={formatXOF(s.finance.commissions_estimated)} hint="Dossiers en cours, une estimation par bien" />
                 <Stat label="Commissions convenues (en cours)" value={formatXOF(s.finance.commissions_agreed_open)} hint="Dossiers non conclus" />
-                <Stat label="Commissions dues (solde)" value={formatXOF(s.finance.commissions_due_balance)} hint="Exigibles non encaissées" to="/admin/finances/recettes?status=exigible,partiel" />
+                <Stat label="Commissions dues (solde)" value={formatXOF(s.finance.commissions_due_balance)} hint="Exigibles non encaissées" to={links?.commissionsDue} />
               </div>
               <p className="text-xs text-ink-500">
                 Le montant des ventes (prix des biens) n’est pas le chiffre d’affaires de l’agence : seuls les encaissements réels sont comptés.

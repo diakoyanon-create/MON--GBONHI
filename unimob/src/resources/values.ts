@@ -28,15 +28,23 @@ export function toFormValues(fields: FieldDef[], row: Row | null, defaults: Reco
   return out;
 }
 
-/** Valeurs de formulaire → données à envoyer (null pour vide, nombres, dates ISO). */
-export function fromFormValues(fields: FieldDef[], values: FormValues, isEdit: boolean): Row {
+/**
+ * Valeurs de formulaire → données à envoyer (null pour vide, nombres, dates ISO).
+ * `original` : ligne d'origine en modification (sert à traiter les champs masqués).
+ */
+export function fromFormValues(fields: FieldDef[], values: FormValues, isEdit: boolean, original?: Row | null): Row {
   const out: Row = {};
+  // Valeurs d'origine telles que le formulaire les a reçues (mêmes conditions showIf).
+  const before = isEdit && original ? { ...original, ...toFormValues(fields, original) } : null;
   for (const f of fields) {
     if (f.editOnly && !isEdit) continue;
     if (f.showIf && !f.showIf(values)) {
-      // En modification, un champ masqué n'est pas envoyé : sa valeur enregistrée est conservée
-      // (ex. motif « Vendu (TRX-…) » posé par la base). À la création, il reste vide.
-      if (!isEdit) out[f.name] = f.type === 'boolean' ? false : f.type === 'tags' || f.type === 'multiselect' ? [] : null;
+      // Champ masqué. En modification, s'il l'était déjà sur la ligne d'origine (ou si celle-ci est
+      // inconnue), il n'est pas envoyé : la valeur posée par la base est conservée (ex. motif
+      // « Vendu (TRX-…) »). S'il vient d'être masqué (maison → terrain, retiré → disponible, dossier
+      // rouvert), il est remis à vide, comme à la création.
+      if (isEdit && (!before || !f.showIf(before))) continue;
+      out[f.name] = f.type === 'boolean' ? false : f.type === 'tags' || f.type === 'multiselect' ? [] : null;
       continue;
     }
     const v = values[f.name];

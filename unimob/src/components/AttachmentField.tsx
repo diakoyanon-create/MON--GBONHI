@@ -49,7 +49,7 @@ export function AttachmentField({ table, id, bucket, column, label, folder, curr
   return (
     <Section title={label}>
       {currentPath ? (
-        <button className="btn-outline btn-sm" onClick={() => openPrivateFile(bucket, currentPath).catch((e) => setError(humanError(e)))}>Ouvrir le fichier joint</button>
+        <button className="btn-outline btn-sm" onClick={() => { setError(null); openPrivateFile(bucket, currentPath).catch((e) => setError(humanError(e))); }}>Ouvrir le fichier joint</button>
       ) : (
         <p className="text-sm text-ink-500">Aucun fichier joint.</p>
       )}

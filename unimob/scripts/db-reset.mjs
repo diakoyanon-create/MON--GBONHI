@@ -31,9 +31,11 @@ export async function resetDatabase({ seed = true, strictGrants = false, name = 
     };
     let shim = readFileSync(join(root, 'tests/db/supabase-shim.sql'), 'utf8');
     // Mode « projet Supabase récent » : aucun privilège accordé par défaut sur les nouveaux objets.
+    // EXECUTE est accordé à PUBLIC globalement : seule la forme globale (sans « in schema ») le retire.
+    // Elle s'applique aussi aux extensions créées ensuite par les migrations (unaccent, pg_trgm).
     if (strictGrants) {
       shim = shim.replace(/^alter default privileges.*$/gm, '') +
-        '\nalter default privileges in schema public revoke execute on functions from public;\n';
+        '\nalter default privileges for role postgres revoke execute on functions from public;\n';
     }
     try {
       await client.query(shim);

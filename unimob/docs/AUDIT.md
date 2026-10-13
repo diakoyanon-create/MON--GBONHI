@@ -95,6 +95,56 @@ Les corrections sont dans `supabase/migrations/20261010000700_corrections_audit.
 | Site public, mobile, accessibilité | Basse | Recherche publique sensible aux accents : « adjame » ou « angre » ne trouvent pas « Adjamé » ou « Angré » | Corrigé |
 | Site public, mobile, accessibilité | Basse | Titres et descriptions des pages : nom de l'agence jamais ajouté, pluriel fautif (« Local commercials »), prix « — » dans la description | Corrigé |
 
+## Revue de non-régression des corrections (11-13 octobre 2026)
+
+Une seconde revue adversariale a relu les corrections ci-dessus, en 4 dimensions (base de données, interface,
+sécurité, déploiement) avec vérification par preuves exécutées : **30 constats confirmés, dont 26 distincts**
+(4 constats de sécurité recoupaient ceux des autres dimensions). Ils ont été corrigés dans
+`supabase/migrations/20261011000800_corrections_revue.sql` (base), dans l'interface et dans la procédure de
+restauration (`supabase/avant_restauration.sql`, `supabase/apres_restauration.sql`). Chaque correction a ensuite
+été contre-vérifiée par un relecteur indépendant chargé de prouver qu'elle était incomplète. Tests :
+`tests/db/revue.test.ts`, `tests/db/grants-stricts.test.ts`, `tests/unit/revue-admin.test.ts`,
+`tests/unit/revue-public.test.ts`.
+
+| Dimension | Gravité | Constat | Statut |
+|---|---|---|---|
+| Base de données | Haute | L'anonymisation recopiait les données personnelles (avant/après) dans le journal, qui n'est pas effaçable | Corrigé : le journal de la personne et des lignes liées (demandes, échanges même supprimés, visites, tâches, contrôles de documents) est expurgé |
+| Déploiement | Haute | La restauration documentée rendait `promote_to_admin` et 30 autres fonctions privilégiées appelables par un visiteur (privilèges par défaut de la cible) | Corrigé : étape préalable `avant_restauration.sql` et contrôle automatique `apres_restauration.sql` ; procédure retestée sur 3 cibles |
+| Base de données | Moyenne | Verrouillage de l'auteur (`created_by`…) : impossible de supprimer un compte ayant créé une donnée | Corrigé |
+| Base de données | Moyenne | Preuve de consentement réécrivable (texte, canal « Site web », date antidatée) ; texte public perdu si un membre connecté envoyait le formulaire | Corrigé |
+| Base de données | Moyenne | Commission répartie sur plusieurs écritures : chaque écriture recevait le montant total | Corrigé : synchronisation seulement s'il y a une seule écriture |
+| Base de données | Moyenne | À la vente, une commission « prévue » devenait exigible avec son ancien montant (ou restait à 0) | Corrigé |
+| Interface | Moyenne | Exports de plus de 1000 lignes : doublons et lignes manquantes (tri non unique) | Corrigé : départage par identifiant |
+| Interface | Moyenne | Champs masqués conservés : un terrain gardait ses chambres (visibles sur le site et dans les filtres) | Corrigé |
+| Interface | Moyenne | Recherche publique : « cœur » ou l'apostrophe typographique des téléphones ne trouvaient plus rien | Corrigé : même normalisation que la base |
+| Déploiement | Moyenne | Restauration dans un projet neuf : vues du site public perdues (extension `unaccent` absente) | Corrigé (étape préalable + contrôle) |
+| Déploiement | Moyenne | Balise canonique figée après navigation : le partage Chrome Android envoyait la mauvaise annonce | Corrigé |
+| Base de données | Basse | Changement de propriétaire contournable quand le bien n'en avait pas ; dossiers clôturés ensuite non modifiables | Corrigé |
+| Base de données | Basse | Indicateur « commissions convenues en cours » compté plusieurs fois par bien | Corrigé |
+| Base de données | Basse | À la vente, les offres des dossiers concurrents restaient « en attente » | Corrigé : elles passent « Expirée » |
+| Sécurité | Basse | Nom du profil modifiable par chacun (usurpation dans le journal) ; `log_event` « publication » ouvert à tout le personnel | Corrigé : nom modifiable par l'administrateur seul ; email affiché dans le journal |
+| Sécurité | Basse | Offres d'une vente conclue réécrivables par un agent | Corrigé : offres figées sur un dossier clôturé (sauf administrateur) |
+| Interface | Basse | Document privé : fenêtre bloquée et onglet de l'application remplacé par le PDF | Corrigé : fenêtre ouverte dès le clic ; message clair si elle est bloquée |
+| Interface | Basse | Profil jamais rechargé : activation ou changement de rôle ignorés jusqu'au rechargement manuel | Corrigé (+ bouton « Vérifier à nouveau ») |
+| Interface | Basse | Tuiles du tableau de bord menant à des listes différentes du chiffre affiché | Corrigé (nouveaux filtres de dates) |
+| Interface | Basse | Filtre « Zone recherchée » faux avec une virgule ou un guillemet | Corrigé |
+| Interface | Basse | PDF : accents décomposés (copier-coller) affichés « ? » | Corrigé |
+| Interface | Basse | Catalogue : changer le tri effaçait les filtres saisis | Corrigé |
+| Interface | Basse | Fiches prospect/propriétaire démontées à chaque rechargement (retour en haut, saisie perdue) | Corrigé |
+| Déploiement | Basse | Aperçus de partage : un « $ » dans un titre corrompait le HTML | Corrigé |
+| Déploiement | Basse | Mode de test « privilèges stricts » sans effet sur les fonctions | Corrigé : révocation globale réelle, contrôlée par test |
+| Déploiement | Basse | Domaine personnalisé : `robots.txt` restait sur l'adresse pages.dev | Corrigé (procédure DEPLOIEMENT.md §5) |
+
+La contre-vérification a confirmé ces corrections et relevé des compléments, eux aussi corrigés et testés :
+`unaccent` rendue explicitement exécutable par le visiteur (sur un projet Supabase qui retire les droits par défaut,
+le catalogue du site aurait été hors service, y compris après une restauration) ; réouverture d'une vente refusée
+tant que le bien appartient à un autre propriétaire ; anonymisation étendue aux titres, actions et numéros de pièces
+des fiches liées et aux résumés du journal ; date d'accord d'un prospect reprise de l'envoi du formulaire du site
+(date de réception d'une demande non modifiable par l'équipe) ; profil relu aussi au rafraîchissement du jeton
+(désactivation prise en compte après une longue absence) ; message « autorisez les fenêtres pop-up » pour les
+justificatifs ; canonique d'une fiche toujours en majuscules ; dates impossibles (30 février) ignorées dans les
+filtres ; séquences fermées au visiteur.
+
 ## Constat réfuté
 
 - Statut « Vérifié » attribuable sans aucun contrôle documentaire, ce qui débloque la publication — réfuté : statut de vérification déclaratif, non exposé au public, procédure documentée.

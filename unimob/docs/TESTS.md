@@ -1,7 +1,7 @@
 # Tests et rapport d’exécution
 
-Tous les résultats ci-dessous ont été **réellement obtenus** (dernière exécution complète : 11 octobre 2026,
-après les corrections de l’audit) dans l’environnement de
+Tous les résultats ci-dessous ont été **réellement obtenus** (dernière exécution complète : 13 octobre 2026,
+après les corrections de l’audit et de la revue de non-régression) dans l’environnement de
 développement (Linux, Node 22, PostgreSQL 16.15, Chromium via Playwright 1.56). Aucune donnée personnelle réelle :
 uniquement des données fictives.
 
@@ -9,16 +9,16 @@ uniquement des données fictives.
 
 | Suite | Commande | Fichiers | Tests | Résultat |
 |---|---|---|---|---|
-| Unitaires (règles métier, composants, corrections) | `npm test` | 3 | 42 | ✅ 42/42 |
-| Base de données (RLS, contraintes, déclencheurs, finances, corrections, privilèges stricts) | `npm run test:db` | 6 | 124 | ✅ 124/124 |
+| Unitaires (règles métier, composants, corrections) | `npm test` | 5 | 92 | ✅ 92/92 |
+| Base de données (RLS, contraintes, déclencheurs, finances, corrections, privilèges stricts) | `npm run test:db` | 7 | 151 | ✅ 151/151 |
 | Bout en bout — projet Supabase récent (aucun privilège par défaut) | `npm run test:e2e` | 3 | 24 | ✅ 24/24 |
 | Bout en bout — ancien projet (privilèges par défaut larges) | `E2E_LEGACY_GRANTS=1 npm run test:e2e` | 3 | 24 | ✅ 24/24 |
 | Lint + types + build de production | `npm run lint`, `npm run typecheck`, `npm run build` | — | — | ✅ sans erreur |
-| Sauvegarde → restauration | `scripts/backup.sh` + `pg_restore` | — | — | ✅ (voir SAUVEGARDE.md) |
+| Sauvegarde → restauration (3 cibles) | `scripts/backup.sh` + `avant_restauration.sql` + `pg_restore` + `apres_restauration.sql` | — | — | ✅ (voir SAUVEGARDE.md) |
 
 ## Ce que couvre chaque suite
 
-### Base de données — `tests/db/` (124 tests)
+### Base de données — `tests/db/` (151 tests)
 
 Exécutée sur PostgreSQL avec un *shim* reproduisant Supabase (rôles `anon`/`authenticated`, `auth.uid()`,
 schéma `storage`) **et les privilèges par défaut larges de Supabase**, pour prouver que ce sont bien les
@@ -48,15 +48,22 @@ et le JWT d’un utilisateur, comme le ferait l’API.
   recalcul), cohérence du rapport financier, `created_by` non usurpable, courriel du profil, journal des rôles et
   paramètres, `log_event` restreint, historique des statuts par rôle, anonymisation, superficie en hectares,
   tableau de bord.
-- `grants-stricts.test.ts` (5) : base créée **sans aucun privilège par défaut** (comportement des projets Supabase
-  récents) — le site public, l’espace agent, le comptable et l’admin fonctionnent ; les fonctions sensibles restent
-  fermées. Un contrôle complémentaire a vérifié que, sans la migration 7, un agent recevait « permission denied ».
+- `grants-stricts.test.ts` (7) : base créée **sans aucun privilège par défaut**, y compris sur les fonctions
+  (révocation globale de `EXECUTE`, contrôlée dans `pg_default_acl` ; une fonction créée ensuite n’est pas exécutable
+  par un visiteur ; les extensions `unaccent` et `pg_trgm` sont créées après cette révocation, cas le plus défavorable) — le site public, l’espace agent, le comptable et l’admin fonctionnent, ainsi que les règles de la
+  migration 8 ; les fonctions sensibles restent fermées. Un contrôle complémentaire a vérifié que, sans la migration 7,
+  un agent recevait « permission denied ».
+- `revue.test.ts` (25) : non-régression de la revue du 11 octobre — suppression d’un compte auteur de données,
+  anonymisation expurgeant le journal et les champs libres liés, date d’accord reprise du formulaire à la conversion,
+  réouverture refusée après changement de propriétaire, droits de `unaccent` et des séquences, preuve de consentement non falsifiable (texte, canal, date), commission
+  répartie ou convenue avant la vente, offres expirées et figées sur un dossier clôturé, changement de propriétaire,
+  indicateur des commissions convenues, nom du profil et `log_event`. Chaque test échoue sans la migration 8.
 - `finances.test.ts` (15) : encaissements partiels, solde, statut calculé ; dépassement refusé ; corrections
   négatives motivées, encaissements non modifiables/supprimables ; recettes non supprimables ; estimation de
   commission (%, minimum, forfait, arrondi) ; distinction estimée / convenue / exigible / encaissée / solde ;
   rapport financier cohérent avec les données sources ; tableau de bord du comptable ; tâches en retard.
 
-### Unitaires — `tests/unit/` (42 tests)
+### Unitaires — `tests/unit/` (92 tests)
 
 Formats XOF et fuseau Africa/Abidjan, conversion des dates, estimation de commission (identique à la base),
 liens WhatsApp, export CSV (neutralisation des formules Excel, colonnes sensibles interdites), contrôle des
@@ -65,6 +72,13 @@ formulaires, nettoyage des recherches, robustesse des mots de passe, envoi du fo
 `corrections.test.ts` (17) : montants « 150.000 », champs masqués conservés, liens d’invitation, robots.txt,
 injection Open Graph (échappement HTML), descriptions, titres, recherche sans accents, PDF (caractères hors WinAnsi),
 configuration invalide, numéro de page, erreur de chargement après déploiement, refus d’envoyer une photo non réencodée.
+`revue-admin.test.ts` (26) : requêtes PostgREST réellement émises (fetch simulé) — départage unique des exports par
+tranches, champs masqués effacés ou conservés, filtre « contient » échappé, liens des tuiles du tableau de bord,
+fiche non démontée au rechargement, email de l’auteur dans le journal, offres d’un dossier clôturé, canal « Site web ».
+`revue-public.test.ts` (24) : recherche normalisée comme `unaccent` (391 caractères comparés à PostgreSQL),
+documents privés (fenêtre ouverte avant tout appel réseau, pop-up bloqué), rechargement du profil et « Vérifier à
+nouveau », PDF (NFC, contrôles C1), tri du catalogue sans perte de saisie, balise canonique, aperçus de partage avec
+`$` dans le titre.
 
 ### Bout en bout — `tests/e2e/` (24 tests)
 

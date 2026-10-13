@@ -237,9 +237,10 @@ describe('Auteurs, profils et journal', () => {
     expect(deleted).toHaveLength(0);
   });
 
-  it('un utilisateur ne change pas le courriel de son profil ; le changement Auth est synchronisé', async () => {
+  it('un utilisateur ne change ni le courriel ni le nom de son profil ; le changement Auth est synchronisé', async () => {
     await expect(as(assistant, (q) => q(`update profiles set email = 'admin@usurpe.test' where id = $1`, [assistant.uid]))).rejects.toThrow(/courriel/);
-    await as(assistant, (q) => q(`update profiles set full_name = 'Nom modifiable' where id = $1`, [assistant.uid]));
+    // Le nom identifie l'auteur dans le journal : réservé à l'administrateur depuis la migration 0008.
+    await expect(as(assistant, (q) => q(`update profiles set full_name = 'Nom modifiable' where id = $1`, [assistant.uid]))).rejects.toThrow(/nom/);
     await sql(`update auth.users set email = 'nouveau.mail@test.invalid' where id = $1`, [assistant.uid]);
     const [p] = await sql('select email from profiles where id = $1', [assistant.uid]);
     expect(p.email).toBe('nouveau.mail@test.invalid');

@@ -33,6 +33,8 @@ export type FieldDef = {
   maxLength?: number;
   full?: boolean;
   showIf?: (values: Record<string, unknown>) => boolean;
+  /** Options proposées seulement si c'est la valeur enregistrée (ex. canal « Site web », réservé au formulaire public). */
+  savedOnlyOptions?: Option[];
   /** Masqué à la création (champ géré par le flux). */
   editOnly?: boolean;
 };
@@ -56,8 +58,8 @@ export type ResourceConfig = {
   filters?: Filter[];
   /** Filtre par défaut « masquer archivés » etc. */
   hiddenStatuses?: { column: string; values: string[]; label: string };
-  /** Filtres numériques « entre » : paramètres d'URL <name>_min et <name>_max. */
-  rangeFilters?: Array<{ name: string; label: string }>;
+  /** Filtres « entre » : paramètres d'URL <name>_min et <name>_max (montants, ou dates si type 'date'). */
+  rangeFilters?: Array<{ name: string; label: string; type?: 'amount' | 'date' }>;
   /** Filtre « couvre la valeur » sur une fourchette min/max (ex. budget d'un prospect). */
   coverFilter?: { param: string; label: string; minCol: string; maxCol: string };
   /** Filtre « contient » sur une colonne tableau (ex. zones recherchées). */

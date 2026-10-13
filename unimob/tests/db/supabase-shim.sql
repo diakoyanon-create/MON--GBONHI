@@ -25,6 +25,9 @@ end $$;
 create schema if not exists extensions;
 grant usage on schema extensions to anon, authenticated, service_role;
 create extension if not exists pgcrypto with schema extensions;
+-- unaccent et pg_trgm sont créées par la migration 1, comme sur un projet Supabase neuf : en mode
+-- « privilèges stricts », elles le sont donc après la révocation de EXECUTE (cas le plus défavorable,
+-- couvert par les droits explicites de la migration 8).
 
 create schema if not exists auth;
 grant usage on schema auth to anon, authenticated, service_role;

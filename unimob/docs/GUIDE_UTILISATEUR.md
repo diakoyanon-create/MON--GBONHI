@@ -9,7 +9,8 @@ Sur Android (Chrome) : menu ⋮ → *Ajouter à l’écran d’accueil* pour l�
 2. Saisissez votre adresse et votre mot de passe.
 3. Mot de passe oublié : lien sous le formulaire ; un courriel vous permet d’en choisir un nouveau.
 
-Si vous voyez « Accès non autorisé », l’administrateur doit encore vous attribuer un rôle.
+Si vous voyez « Accès non autorisé », l’administrateur doit encore vous attribuer un rôle. Quand il l’a fait,
+touchez *Vérifier à nouveau* (inutile de vous reconnecter).
 
 ## Le tableau de bord
 
@@ -49,7 +50,8 @@ téléphone est proposé, et la liste permet de choisir n’importe quel prospec
 *Marquer traitée*, *Sans suite* ou *Indésirable*.
 
 Pour une demande reçue par téléphone ou WhatsApp, ne cochez « La personne a donné son accord » que si elle l’a
-réellement exprimé : votre nom et la date sont enregistrés comme preuve.
+réellement exprimé : votre nom, votre email et la date sont enregistrés comme preuve, qui ne peut plus être modifiée
+ensuite. Le canal « Site web » est réservé aux demandes arrivées par le formulaire du site.
 
 ## Suivre un prospect
 
@@ -62,7 +64,9 @@ l’historique des échanges (*+ Échange* après chaque appel), les visites, et
 - *Propriétaire* : bouton *Archiver* en bas de la fiche (masqué des listes, rien n’est perdu ; *Désarchiver* pour annuler).
 - *Prospect* : passez son statut à « Archivé ».
 - *Anonymiser (droit à l’effacement)*, réservé à l’administrateur : efface définitivement nom, coordonnées, notes
-  et textes des échanges, en gardant références et montants. Supprimez aussi ses documents confidentiels si besoin.
+  et textes des échanges, en gardant références et montants. Le journal d’activité est expurgé lui aussi.
+  Supprimez aussi ses documents confidentiels si besoin, et vérifiez qu’aucune fiche non rattachée à la personne
+  (notes d’un dossier ou d’un mandat, tâche sans lien) ne la cite.
 
 ## Visites
 
@@ -83,8 +87,9 @@ dans les 30 jours, et relances prévues après les visites.
    Les autres dossiers ouverts sur ce bien sont automatiquement annulés.
 5. *Annulée / Abandonnée* demande un motif ; le bien redevient publié (s’il remplit toujours les conditions)
    lorsqu’il n’y a pas d’autre dossier.
-6. Un dossier clôturé ne se modifie plus (sauf ses notes). Seul l’administrateur peut le rouvrir ; s’il rouvre une
-   vente conclue, le bien redevient disponible et la commission non encaissée est annulée.
+6. Un dossier clôturé ne se modifie plus (sauf ses notes), ses offres non plus ; les offres restées « en attente »
+   passent « Expirée ». Seul l’administrateur peut le rouvrir ; s’il rouvre une vente conclue, le bien redevient
+   disponible et la commission non encaissée est annulée.
 
 ## Finances (administrateur, comptable)
 
@@ -95,6 +100,8 @@ dans les 30 jours, et relances prévues après les visites.
   pour **joindre le justificatif** (PDF ou photo). Le mandat signé se joint de la même façon depuis le mandat.
 - Les montants peuvent être saisis « 150000 », « 150 000 » ou « 150.000 ».
 - *Règles de commission* : taux ou montant fixe **définis par l’agence** (pas des obligations légales).
+- La commission convenue d’un dossier est recopiée automatiquement dans **sa** recette de commission. Si vous l’avez
+  répartie en plusieurs recettes (part vendeur, part acheteur), ajustez-les vous-même : rien n’est recopié.
 - *Finances* : rapport par période + PDF (rapport financier, relevé des commissions).
 
 ## Tâches
@@ -104,6 +111,8 @@ aucun SMS ni courriel n’est envoyé.
 
 ## Documents, rapports et exports
 
+- Les documents confidentiels s’ouvrent dans un nouvel onglet. Si le navigateur bloque les fenêtres pop-up, un message
+  le signale : autorisez-les pour ce site puis réessayez.
 - Chaque fiche a un bouton *PDF*. *Documents* génère inventaire, liste des tâches, relevés et **modèles de mandat**
   (à faire valider par un professionnel avant toute signature).
 - *Rapports* : exports CSV par période (ouvrables dans Excel), rapport d’activité PDF, biens par zone.
@@ -113,7 +122,9 @@ aucun SMS ni courriel n’est envoyé.
 
 - *Paramètres* : nom, logo, coordonnées, numéro et message WhatsApp, zones, catégories, règles de publication,
   textes de confidentialité et mentions légales.
-- *Utilisateurs* : attribuer un rôle et activer/désactiver un compte (les invitations se font dans Supabase).
+- *Utilisateurs* : attribuer un rôle, corriger le nom et activer/désactiver un compte (les invitations se font dans
+  Supabase ; chacun ne peut pas changer son propre nom). Pour un départ, désactivez le compte ; la suppression
+  (*Authentication → Users → Delete user* dans Supabase) garde les données créées par la personne.
 - *Journal d’activité* : qui a modifié quoi et quand (lecture seule).
 
 ## Bonnes pratiques

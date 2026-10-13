@@ -21,9 +21,14 @@ const MARGIN = 16;
 /**
  * La police Helvetica intégrée à jsPDF ne couvre que l'encodage WinAnsi : un seul caractère
  * hors de cet ensemble (→, −, ≤, espaces fines…) rend toute la ligne illisible.
+ * Le texte est d'abord recomposé (NFC) : un « é » collé depuis macOS ou un PDF (e + accent
+ * combinant) redevient « é » au lieu de « e? ». Les caractères de contrôle C1 (U+0080 à U+009F)
+ * sont retirés : jsPDF les afficherait comme les glyphes WinAnsi de même code (€, ‚, …).
  */
 export function pdfSafe(input: unknown): string {
   return String(input ?? '')
+    .normalize('NFC')
+    .replace(/[\u0080-\u009f]/g, '')
     .replace(/[\u202f\u00a0\u2007\u2009]/g, ' ')
     .replace(/[→⟶]/g, '->')
     .replace(/[←]/g, '<-')

@@ -39,6 +39,11 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+function sameProfile(a: Profile | null, b: Profile | null): boolean {
+  if (!a || !b) return a === b;
+  return a.id === b.id && a.full_name === b.full_name && a.email === b.email && a.role === b.role && a.is_active === b.is_active;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -48,9 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
-   * Charge le profil. En cas d'échec réseau, le profil courant est CONSERVÉ et une nouvelle
-   * tentative est programmée : une coupure passagère ne doit pas éjecter l'utilisateur
-   * de l'espace privé ni lui faire perdre sa saisie.
+   * Charge le profil. En cas d'échec réseau, le profil courant est CONSERVÉ (s'il s'agit du même
+   * utilisateur) et une nouvelle tentative est programmée : une coupure passagère ne doit pas
+   * éjecter l'utilisateur de l'espace privé ni lui faire perdre sa saisie.
    */
   const loadProfile = useCallback(async (s: Session | null, attempt = 0): Promise<void> => {
     if (retryRef.current) clearTimeout(retryRef.current);
@@ -61,13 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const { data, error } = await supabase.from('profiles').select('id, full_name, email, role, is_active').eq('id', s.user.id).maybeSingle();
     if (error) {
+      if (userIdRef.current !== s.user.id) setProfile(null);
       setProfileError(true);
       if (attempt < 5) retryRef.current = setTimeout(() => void loadProfile(s, attempt + 1), 2000 * (attempt + 1));
       return;
     }
     userIdRef.current = s.user.id;
     setProfileError(false);
-    setProfile((data as Profile | null) ?? null);
+    // Profil inchangé : même objet, pour ne pas faire recalculer toute l'application à chaque retour sur l'onglet.
+    const next = (data as Profile | null) ?? null;
+    setProfile((prev) => (sameProfile(prev, next) ? prev : next));
   }, []);
 
   useEffect(() => {
@@ -79,12 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await loadProfile(data.session);
       if (active) setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      // Rafraîchissement de jeton ou retour au premier plan pour le même utilisateur :
-      // inutile de recharger le profil. Différé : pas d'appel Supabase dans le callback.
-      const sameUser = s?.user.id && s.user.id === userIdRef.current;
-      if (sameUser && event !== 'USER_UPDATED') return;
+      // Chaque événement recharge le profil : SIGNED_IN (émis aussi au retour sur l'onglet) et
+      // TOKEN_REFRESHED (rafraîchissement horaire, seul événement émis au retour après une longue
+      // absence). Activation, changement de rôle ou désactivation sont ainsi pris en compte sans
+      // recharger la page. Un profil inchangé garde le même objet (aucun nouveau rendu) et, en cas
+      // d'échec réseau, loadProfile conserve le profil courant (rien n'est démonté).
+      // Différé : pas d'appel Supabase dans le callback.
       setTimeout(() => void loadProfile(s), 0);
     });
     return () => {

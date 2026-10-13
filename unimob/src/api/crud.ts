@@ -23,6 +23,17 @@ export function sanitizeSearch(term: string): string {
   return term.replace(/[%_,()*\\:"]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 
+/**
+ * Littéral tableau PostgreSQL pour l'opérateur cs : chaque élément entre guillemets, « " » et « \ » échappés.
+ * (supabase-js joint les valeurs sans guillemets : « Cocody, Riviera 3 » deviendrait deux éléments.)
+ */
+export function pgArrayLiteral(values: string[]): string {
+  return `{${values.map((s) => `"${s.replace(/["\\]/g, '\\$&')}"`).join(',')}}`;
+}
+
+/** Vues sans colonne id : clé unique utilisée pour départager le tri. */
+const TIE_BREAKERS: Record<string, string> = { transaction_commissions: 'transaction_id' };
+
 /** Taille maximale d'une réponse de l'API Supabase (réglage « Max rows », 1000 par défaut). */
 export const API_MAX_ROWS = 1000;
 
@@ -39,13 +50,17 @@ function buildQuery(table: string, p: ListParams) {
   for (const [k, v] of Object.entries(p.notIn ?? {})) if (v.length) q = q.not(k, 'in', `(${v.join(',')})`);
   for (const [k, v] of Object.entries(p.gte ?? {})) if (v !== undefined && v !== '') q = q.gte(k, v);
   for (const [k, v] of Object.entries(p.lte ?? {})) if (v !== undefined && v !== '') q = q.lte(k, v);
-  for (const [k, v] of Object.entries(p.contains ?? {})) if (v.length) q = q.contains(k, v);
+  for (const [k, v] of Object.entries(p.contains ?? {})) if (v.length) q = q.filter(k, 'cs', pgArrayLiteral(v));
   for (const f of p.orFilters ?? []) q = q.or(f);
   const term = p.search ? sanitizeSearch(p.search.term) : '';
   if (p.search && term) {
     q = q.or(p.search.columns.map((c) => `${c}.ilike.*${term}*`).join(','));
   }
   if (p.order) q = q.order(p.order.column, { ascending: p.order.ascending ?? false, nullsFirst: false });
+  // Départage toujours par une clé unique : sinon les ex aequo (même date…) changent d'ordre d'une
+  // requête à l'autre, et la lecture par tranches renvoie des doublons et perd des lignes.
+  const tie = TIE_BREAKERS[table] ?? 'id';
+  if (p.order?.column !== tie) q = q.order(tie, { ascending: true });
   return q;
 }
 

@@ -60,7 +60,8 @@ export function OwnerDetailPage() {
     return { props: props.rows, mandates: mandates.rows, checks: checks.rows };
   }, [id]);
 
-  if (loading) return <Spinner />;
+  // Rechargement (échange, archivage…) : la fiche reste affichée (défilement et saisies conservés).
+  if (loading && o?.id !== id) return <Spinner />;
   if (error || !o) return <ErrorBox error={error ?? 'Propriétaire introuvable.'} />;
   const ownerAnonymized = o.last_name === 'ANONYMISÉ';
 
@@ -156,7 +157,8 @@ export function BuyerDetailPage() {
     return { matches, visits: visits.rows, dups };
   }, [id]);
 
-  if (loading) return <Spinner />;
+  // Rechargement (échange, archivage…) : la fiche reste affichée (défilement et saisies conservés).
+  if (loading && b?.id !== id) return <Spinner />;
   if (error || !b) return <ErrorBox error={error ?? 'Prospect introuvable.'} />;
 
   return (

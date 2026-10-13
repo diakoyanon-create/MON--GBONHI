@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  CATALOG_PAGE_SIZE, fetchCatalog, fetchFeatured, fetchPublicCities, fetchRecent, fetchPublicProperty, fetchSimilar, type CatalogFilters, type PublicProperty,
+  CATALOG_PAGE_SIZE, catalogParams, fetchCatalog, fetchFeatured, fetchPublicCities, fetchRecent, fetchPublicProperty, fetchSimilar, type CatalogFilters, type PublicProperty,
 } from '@/api/publicApi';
 import { usePublicAgency, useQuery } from '@/api/hooks';
 import { InquiryForm } from '@/components/InquiryForm';
@@ -146,13 +146,7 @@ export function CatalogPage() {
 
   const apply = (e?: FormEvent) => {
     e?.preventDefault();
-    const p = new URLSearchParams();
-    const map: Array<[keyof CatalogFilters, string]> = [['type', 'type'], ['city', 'ville'], ['district', 'quartier'], ['minPrice', 'prix_min'], ['maxPrice', 'prix_max'], ['minArea', 'surface_min'], ['bedrooms', 'chambres'], ['q', 'q'], ['sort', 'tri']];
-    for (const [k, name] of map) {
-      const val = draft[k];
-      if (val && !(k === 'sort' && val === 'recent')) p.set(name, String(val));
-    }
-    setParams(p);
+    setParams(catalogParams(draft));
   };
   const setD = (k: keyof CatalogFilters, val: string) => setDraft((d) => ({ ...d, [k]: val }));
   const count = data?.count ?? 0;
@@ -187,12 +181,9 @@ export function CatalogPage() {
               value={filters.sort}
               aria-label="Trier"
               onChange={(e) => {
-                // Le tri s'applique immédiatement aux filtres déjà validés.
-                const p = new URLSearchParams(params);
-                if (e.target.value === 'recent') p.delete('tri');
-                else p.set('tri', e.target.value);
-                p.delete('page');
-                setParams(p);
+                // Le tri s'applique immédiatement, avec les filtres saisis même non encore validés
+                // (sinon la resynchronisation du brouillon sur l'URL les effacerait). Retour en page 1.
+                setParams(catalogParams({ ...draft, sort: e.target.value as CatalogFilters['sort'] }));
               }}
             >
               <option value="recent">Plus récents</option><option value="prix-asc">Prix croissant</option><option value="prix-desc">Prix décroissant</option>
@@ -248,6 +239,7 @@ export function PropertyView({ property: p, photos, preview }: { property: Publi
     description: propertyDescription(p),
     image: photoUrl(photos[0]?.storage_path ?? p.primary_photo_path),
     noindex: preview || p.is_demo,
+    path: `/biens/${encodeURIComponent(p.reference)}`,
   });
   const wa = whatsappLink(agency?.whatsapp_number, agency?.whatsapp_message_template, p.reference);
   const current = photos[idx];

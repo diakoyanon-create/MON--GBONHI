@@ -3,7 +3,7 @@ import { listRows, logEvent } from '@/api/crud';
 import { useQuery } from '@/api/hooks';
 import { storagePath, validateFile } from '@/domain/files';
 import { formatDateTime } from '@/lib/format';
-import { openPrivateFile, PRIVATE_UPLOAD_OPTIONS } from '@/lib/photos';
+import { openBlankWindow, openPrivateFile, PRIVATE_UPLOAD_OPTIONS } from '@/lib/photos';
 import { useAuth } from '@/auth/AuthContext';
 import { DOCS_BUCKET, supabase } from '@/lib/supabase';
 import { ErrorBox, Section, Spinner, humanError } from './ui';
@@ -51,10 +51,14 @@ export function PrivateDocuments({ propertyId, ownerId }: { propertyId?: string;
 
   async function open(doc: { id: string; storage_path: string; title: string }) {
     setError(null);
+    let win: Window | null = null;
     try {
+      // Onglet ouvert dans le clic, AVANT l'appel réseau du journal (sinon bloqué comme pop-up).
+      win = openBlankWindow();
       await logEvent('consultation_document', 'property_documents', doc.title, doc.id);
-      await openPrivateFile(DOCS_BUCKET, doc.storage_path);
+      await openPrivateFile(DOCS_BUCKET, doc.storage_path, win);
     } catch (e) {
+      win?.close();
       setError(humanError(e));
     }
   }

@@ -238,7 +238,13 @@ export const inquiryFields: FieldDef[] = [
   { name: 'full_name', label: 'Nom complet', type: 'text', required: true, maxLength: 120 },
   { name: 'phone', label: 'Téléphone', type: 'tel', required: true },
   { name: 'email', label: 'Courriel', type: 'email' },
-  { name: 'source', label: 'Canal', type: 'select', required: true, options: options.inquirySource },
+  // « Site web » est réservé au formulaire public : il n'est proposé que pour une demande qui en vient
+  // déjà (sa source est ainsi conservée à la modification).
+  {
+    name: 'source', label: 'Canal', type: 'select', required: true,
+    options: options.inquirySource.filter((o) => o.value !== 'site_web'),
+    savedOnlyOptions: options.inquirySource.filter((o) => o.value === 'site_web'),
+  },
   { name: 'property_id', label: 'Bien concerné', type: 'relation', relation: REL.property, full: true },
   { name: 'message', label: 'Message / besoin', type: 'textarea', required: true, maxLength: 2000 },
   { name: 'contact_preference', label: 'Préférence de contact', type: 'select', required: true, options: options.contactPref },
@@ -300,6 +306,7 @@ export const visitsConfig: ResourceConfig = {
   order: { column: 'scheduled_at' },
   search: ['reference', 'location'],
   filters: [{ name: 'status', label: 'Statut', options: options.visitStatus }],
+  rangeFilters: [{ name: 'scheduled_at', label: 'Date', type: 'date' }],
   fields: visitFields,
   defaults: { status: 'a_confirmer' },
   columns: [
@@ -348,6 +355,7 @@ export const transactionsConfig: ResourceConfig = {
   order: { column: 'updated_at' },
   search: ['reference'],
   filters: [{ name: 'status', label: 'Statut', options: options.transactionStatus }],
+  rangeFilters: [{ name: 'concluded_date', label: 'Conclusion', type: 'date' }],
   fields: transactionFields,
   defaults: { status: 'negociation' },
   notice: COMMISSION_DISCLAIMER,
@@ -499,6 +507,7 @@ export const tasksConfig: ResourceConfig = {
   search: ['title', 'description'],
   filters: [{ name: 'status', label: 'Statut', options: options.taskStatus }, { name: 'priority', label: 'Priorité', options: options.taskPriority }],
   hiddenStatuses: { column: 'status', values: ['terminee', 'annulee'], label: 'Afficher terminées / annulées' },
+  rangeFilters: [{ name: 'due_at', label: 'Échéance', type: 'date' }],
   fields: taskFields,
   defaults: { priority: 'normale', status: 'a_faire' },
   notice: 'Les rappels s’affichent dans l’application. Aucune notification externe (SMS, courriel) n’est envoyée tant qu’un service n’a pas été réellement configuré.',

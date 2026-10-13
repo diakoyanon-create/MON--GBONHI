@@ -111,7 +111,7 @@ export async function startStack() {
     try {
       let sqlText = readFileSync(join(root, f), 'utf8');
       if (f.endsWith('supabase-shim.sql') && !legacy) {
-        sqlText = sqlText.replace(/^alter default privileges.*$/gm, '') + '\nalter default privileges in schema public revoke execute on functions from public;\n';
+        sqlText = sqlText.replace(/^alter default privileges.*$/gm, '') + '\nalter default privileges for role postgres revoke execute on functions from public;\n';
       }
       await c.query(sqlText);
     } catch (e) {

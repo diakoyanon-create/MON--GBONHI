@@ -13,11 +13,16 @@ Aucune dépense n’est nécessaire avec l’offre gratuite ; vérifiez les quot
 ## 2. Appliquer les migrations
 
 Option A0 — le plus simple : *SQL Editor → New query*, collez tout le fichier `supabase/installation_complete.sql`
-(les 7 migrations réunies, sans données de démonstration) puis *Run*. Une seule fois, sur un projet vierge.
+(les 8 migrations réunies, sans données de démonstration) puis *Run*. Une seule fois, sur un projet vierge.
 
-> **Vous aviez déjà exécuté une version précédente de ce fichier (6 migrations) ?** N’exécutez PAS à nouveau le fichier
-> complet : exécutez seulement `supabase/migrations/20261010000700_corrections_audit.sql` (corrections de l’audit,
-> dont les privilèges indispensables aux projets Supabase récents).
+> **Vous aviez déjà exécuté une version précédente de ce fichier ?** N’exécutez PAS à nouveau le fichier complet :
+> exécutez seulement, dans l’ordre, les migrations qui manquent :
+> - version à 6 migrations : `20261010000700_corrections_audit.sql` (corrections de l’audit, dont les privilèges
+>   indispensables aux projets Supabase récents), puis `20261011000800_corrections_revue.sql` ;
+> - version à 7 migrations : `20261011000800_corrections_revue.sql` seule (corrections de la revue de non-régression ;
+>   rejouable sans risque).
+>
+> Pour savoir ce qui est installé : `select to_regprocedure('public.log_scrub_person(text,uuid,text[])') is not null as m8, to_regclass('private.app_secret') is not null as m7;`
 
 Option A — éditeur SQL, fichier par fichier : *SQL Editor → New query*, collez puis exécutez **dans l’ordre** chaque fichier de
 `supabase/migrations/` :
@@ -29,9 +34,10 @@ Option A — éditeur SQL, fichier par fichier : *SQL Editor → New query*, col
 5. `20261009000500_stockage.sql`
 6. `20261009000600_site_public_et_rapports.sql`
 7. `20261010000700_corrections_audit.sql`
+8. `20261011000800_corrections_revue.sql`
 
 > Les projets Supabase récents n’accordent plus automatiquement de privilèges sur les nouvelles tables aux rôles
-> `anon` et `authenticated`. La migration 7 les accorde explicitement (la sécurité reste assurée par RLS) :
+> `anon` et `authenticated`. Les migrations 7 et 8 les accordent explicitement (la sécurité reste assurée par RLS) :
 > sans elle, l’espace privé renverrait « permission denied ».
 
 Option B — CLI Supabase : `npx supabase link --project-ref <ref>` puis `npx supabase db push`.
@@ -123,6 +129,9 @@ select has_function_privilege('anon', 'public.promote_to_admin(text)', 'execute'
 -- Un membre de l'équipe a bien accès aux tables (doit renvoyer true)
 select has_table_privilege('authenticated', 'public.properties', 'select');
 ```
+
+Contrôle automatique complet (rejouable, ne modifie rien) : exécutez `supabase/apres_restauration.sql` ; il doit
+afficher « Contrôles de sécurité : conformes » (il sert aussi après une restauration).
 
 Lancez aussi *Advisors → Security Advisor*. Avertissement attendu : les vues `public_properties`,
 `public_property_photos` et `public_agency_info` sont signalées « security definer view » ;

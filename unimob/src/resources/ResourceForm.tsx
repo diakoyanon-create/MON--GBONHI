@@ -49,7 +49,7 @@ export function ResourceForm({ table, fields, row, defaults, extra, submitLabel,
     setSaving(true);
     setServerError(null);
     try {
-      const payload = { ...fromFormValues(visibleFields, values, isEdit), ...(extra ?? {}) };
+      const payload = { ...fromFormValues(visibleFields, values, isEdit, row), ...(extra ?? {}) };
       const saved = isEdit ? await updateRow(table, row!.id, payload) : await insertRow(table, payload);
       onSaved(saved);
     } catch (err) {
@@ -65,7 +65,7 @@ export function ResourceForm({ table, fields, row, defaults, extra, submitLabel,
         {visibleFields
           .filter((f) => !f.showIf || f.showIf(values))
           .map((f) => (
-            <FieldInput key={f.name} field={f} value={values[f.name]} error={errors[f.name]} onChange={(v) => set(f.name, v)} settings={settings} />
+            <FieldInput key={f.name} field={f} value={values[f.name]} error={errors[f.name]} onChange={(v) => set(f.name, v)} settings={settings} saved={row?.[f.name]} />
           ))}
       </div>
       {aside?.(values)}

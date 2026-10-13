@@ -8,7 +8,7 @@ Référence : cahier des charges v1.0. « Testé » = couvert par un test automa
 |---|---|
 | Projet React + TypeScript + Vite + Tailwind + React Router | Terminé |
 | Schéma PostgreSQL normalisé : 19 tables du cahier + `document_checks`, `payments`, `status_history`, `reference_counters` (+ schéma `private`) | Terminé, testé |
-| Migrations versionnées (7 fichiers), UUID, références commerciales uniques, dates, contraintes, index | Terminé, testé |
+| Migrations versionnées (8 fichiers), UUID, références commerciales uniques, dates, contraintes, index | Terminé, testé |
 | RLS sur toutes les tables, rôles, stockage public/privé | Terminé, testé |
 | Authentification Supabase, garde des routes, compte admin sans mot de passe en dur | Terminé, testé (E2E) |
 
@@ -63,13 +63,30 @@ listées dans [AUDIT.md](AUDIT.md). Ajouts fonctionnels issus de l’audit :
 - Site public : sections « À la une » et « Récemment publiés », recherche sans accents, tri immédiat, aperçus de
   partage (Open Graph côté serveur), formulaire accessible avec brouillon conservé, biens fictifs sans formulaire.
 
+## Revue de non-régression (11-13 octobre 2026) ✅
+
+Seconde revue adversariale des corrections : 26 défauts distincts confirmés, tous corrigés et contre-vérifiés
+(migration 8, interface, procédure de restauration ; détail dans [AUDIT.md](AUDIT.md)). Effets visibles :
+
+- Anonymisation complète, journal d’activité compris ; suppression d’un compte Supabase de nouveau possible.
+- Preuve de consentement non modifiable ; canal « Site web » réservé au formulaire du site.
+- Commissions : pas de montant multiplié quand elle est répartie ; montant convenu repris à la vente ; offres
+  « en attente » expirées et figées quand le dossier est clos.
+- Tableau de bord : chaque case ouvre exactement la liste comptée (nouveaux filtres de dates : conclusion, visites,
+  échéances) ; exports sans doublon au-delà de 1000 lignes.
+- Site public : recherche avec « œ » et apostrophes des téléphones, partage Android de la bonne annonce, tri du
+  catalogue sans perte des filtres saisis.
+- Espace privé : activation d’un compte prise en compte sans recharger (bouton « Vérifier à nouveau ») ; fiches
+  qui ne remontent plus en haut à chaque échange ; documents privés qui n’écrasent plus l’onglet de l’application.
+- Sauvegarde : restauration en 3 étapes avec contrôle automatique de la sécurité.
+
 ## Phase 6 — Tests et déploiement 🟡
 
 | Élément | État |
 |---|---|
-| Tests automatisés (190 exécutions : 42 unitaires, 124 base, 24 bout en bout dans 2 configurations Supabase) | Terminé |
+| Tests automatisés (291 exécutions : 92 unitaires, 151 base, 24 bout en bout dans 2 configurations Supabase) | Terminé |
 | Guides : installation, Supabase, déploiement, sauvegarde, utilisation, sécurité, coûts, audit | Terminé |
-| Sauvegarde/restauration testée (droits d’accès compris) | Testée sur PostgreSQL local ; **à refaire sur Supabase** |
+| Sauvegarde/restauration testée (droits d’accès compris, 3 cibles, contrôle automatique `apres_restauration.sql`) | Testée sur PostgreSQL local ; **à refaire sur Supabase** |
 | Mise en ligne (préproduction, production) | **Non faite** : nécessite les comptes Supabase/Cloudflare du propriétaire |
 
 ## Limites connues
@@ -94,7 +111,7 @@ listées dans [AUDIT.md](AUDIT.md). Ajouts fonctionnels issus de l’audit :
 
 ## Prochaines étapes proposées
 
-1. Créer le projet Supabase de préproduction (compte du propriétaire) et appliquer les 7 migrations.
+1. Créer le projet Supabase de préproduction (compte du propriétaire) et appliquer les 8 migrations.
 2. Déployer la préproduction Cloudflare Pages ; dérouler la recette manuelle (TESTS.md).
 3. Tester une sauvegarde/restauration sur Supabase.
 4. Saisir les vraies informations de l’agence (Paramètres) et faire valider les textes juridiques.

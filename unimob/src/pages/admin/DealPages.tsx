@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getRow, listRows, rpc, type Row } from '@/api/crud';
 import { useAgencySettings, useQuery } from '@/api/hooks';
 import { useAuth } from '@/auth/AuthContext';
@@ -32,6 +32,9 @@ const offerFields: FieldDef[] = [
   { name: 'notes', label: 'Notes', type: 'textarea' },
 ];
 
+/** Statuts d'un dossier clôturé (vente conclue, annulée, abandonnée). */
+const CLOSED_STATUSES = ['vente_conclue', 'annulee', 'abandonnee'];
+
 export function TransactionDetailPage() {
   const { id = '' } = useParams();
   const { can } = useAuth();
@@ -50,6 +53,9 @@ export function TransactionDetailPage() {
   if (loading) return <Spinner />;
   if (error || !t) return <ErrorBox error={error ?? 'Dossier introuvable.'} />;
   const c = commissionRow.data;
+  // Dossier clôturé : offres figées, sauf pour l'administrateur (la base refuse aussi).
+  const closed = CLOSED_STATUSES.includes(t.status);
+  const canEditOffers = can.negotiate && (!closed || can.admin);
 
   return (
     <div className="space-y-5">
@@ -85,7 +91,8 @@ export function TransactionDetailPage() {
             ]} />
             {t.conditions && <p className="mt-4 text-sm whitespace-pre-line"><strong>Conditions : </strong>{t.conditions}</p>}
           </Section>
-          <Section title="Offres et contre-offres" actions={can.negotiate && <button className="btn-outline btn-sm" onClick={() => setOffer('new')}>+ Offre</button>}>
+          <Section title="Offres et contre-offres" actions={canEditOffers && <button className="btn-outline btn-sm" onClick={() => setOffer('new')}>+ Offre</button>}>
+            {closed && can.negotiate && !can.admin && <p className="mb-3 text-xs text-ink-500">Dossier clôturé : les offres ne peuvent plus être ajoutées ni modifiées.</p>}
             {offers.loading ? <Spinner /> : !offers.data?.rows.length ? <p className="text-sm text-ink-500">Aucune offre enregistrée.</p> : (
               <div className="table-wrap">
                 <table className="table">
@@ -98,7 +105,7 @@ export function TransactionDetailPage() {
                         <td>{o.from_party}</td>
                         <td className="tabular-nums">{formatXOF(o.amount)}</td>
                         <td><StatusBadge value={o.status} map={OFFER_STATUS} /></td>
-                        <td>{can.negotiate && <button className="btn-ghost btn-sm" onClick={() => setOffer(o)}>Modifier</button>}</td>
+                        <td>{canEditOffers && <button className="btn-ghost btn-sm" onClick={() => setOffer(o)}>Modifier</button>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -202,7 +209,7 @@ export function RevenueDetailPage() {
                     <td>{label(PAYMENT_METHODS, p.method)}</td>
                     <td>{p.payment_reference ?? '—'}</td>
                     <td>{p.is_correction ? <strong>Correction : </strong> : null}{p.note ?? ''}</td>
-                    <td>{p.receipt_path ? <button className="btn-ghost btn-sm" onClick={() => openPrivateFile(RECEIPTS_BUCKET, p.receipt_path).catch(() => window.alert('Justificatif indisponible.'))}>Voir</button> : '—'}</td>
+                    <td>{p.receipt_path ? <button className="btn-ghost btn-sm" onClick={() => openPrivateFile(RECEIPTS_BUCKET, p.receipt_path).catch((e) => window.alert(humanError(e)))}>Voir</button> : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -342,7 +349,9 @@ export function FinancesPage() {
 // Visites : liste + calendrier simple
 // ---------------------------------------------------------------------------
 export function VisitsPage() {
-  const [view, setView] = useState<'calendrier' | 'liste'>('calendrier');
+  const [params] = useSearchParams();
+  // Les liens du tableau de bord (?vue=liste&…) ouvrent directement la liste filtrée.
+  const [view, setView] = useState<'calendrier' | 'liste'>(params.get('vue') === 'liste' ? 'liste' : 'calendrier');
   return (
     <div>
       <div className="mb-3 flex gap-2" role="tablist">

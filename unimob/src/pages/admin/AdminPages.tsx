@@ -117,7 +117,7 @@ export function ReportsPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const zones = useQuery(async () => {
-    const rows = await listAllRows('properties', { select: 'city, district, commercial_status', notIn: { commercial_status: ['archive'] } });
+    const rows = await listAllRows('properties', { select: 'city, district, commercial_status', notIn: { commercial_status: ['archive'] }, order: { column: 'reference', ascending: true } });
     const map = new Map<string, Record<string, number>>();
     for (const r of rows) {
       const k = r.city ?? '—';
@@ -396,7 +396,8 @@ export function ActivityLogPage() {
               {data?.rows.map((l) => (
                 <tr key={l.id}>
                   <td className="whitespace-nowrap">{formatDateTime(l.occurred_at)}</td>
-                  <td>{l.actor?.full_name || l.actor?.email || 'Système'}</td>
+                  {/* Le nom est modifiable par son titulaire : l'email (identifiant de connexion) est toujours affiché. */}
+                  <td>{l.actor ? <><div>{l.actor.full_name || '—'}</div><div className="text-xs text-ink-500">{l.actor.email ?? '—'}</div></> : 'Système'}</td>
                   <td>{l.action}</td>
                   <td>{l.entity_type} {l.summary && <span className="font-mono text-xs">{l.summary}</span>}</td>
                   <td className="max-w-md">

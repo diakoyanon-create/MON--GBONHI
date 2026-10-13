@@ -9,6 +9,8 @@ type Props = {
   error?: string;
   onChange: (value: any) => void;
   settings?: Record<string, any> | null;
+  /** Valeur enregistrée (modification), pour les options réservées. */
+  saved?: unknown;
 };
 
 export function useRelationOptions(field: FieldDef, current?: string): Option[] {
@@ -47,7 +49,7 @@ export function useRelationOptions(field: FieldDef, current?: string): Option[] 
   return extra ? [extra, ...opts] : opts;
 }
 
-export function FieldInput({ field, value, error, onChange, settings }: Props) {
+export function FieldInput({ field, value, error, onChange, settings, saved }: Props) {
   const id = `f-${field.name}`;
   const relOptions = useRelationOptions(field, field.relation && typeof value === 'string' ? value : undefined);
   const describedBy = error ? `${id}-err` : field.help ? `${id}-help` : undefined;
@@ -60,6 +62,7 @@ export function FieldInput({ field, value, error, onChange, settings }: Props) {
   } as const;
 
   let options: Option[] = field.options ?? [];
+  if (field.savedOnlyOptions) options = [...options, ...field.savedOnlyOptions.filter((o) => o.value === saved)];
   if (field.settingsOptions) {
     const list = (settings?.[field.settingsOptions] as string[] | undefined) ?? [];
     options = list.map((s) => ({ value: s, label: s }));

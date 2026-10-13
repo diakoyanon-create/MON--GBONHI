@@ -30,8 +30,10 @@ export function injectMeta(html: string, m: PageMeta): string {
     m.noindex ? `<meta name="robots" content="noindex, nofollow" />` : '',
     `<link rel="canonical" href="${escapeHtml(m.url)}" />`,
   ].filter(Boolean).join('\n    ');
+  // Fonction de remplacement : une chaîne serait interprétée ($&, $`, $' ou $$ d'un titre
+  // recopieraient « </head> » ou tout le début du document dans les balises).
   return html
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+name="description"[^>]*>/i, '')
-    .replace(/<\/head>/i, `    ${tags}\n  </head>`);
+    .replace(/<\/head>/i, () => `    ${tags}\n  </head>`);
 }

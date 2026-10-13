@@ -52,8 +52,9 @@ npm run dev                     # http://localhost:5173
 
 ```
 unimob/
-├── supabase/migrations/   Schéma SQL versionné, RLS, stockage, fonctions (7 migrations)
-├── supabase/installation_complete.sql  Les 7 migrations en un seul fichier (généré)
+├── supabase/migrations/   Schéma SQL versionné, RLS, stockage, fonctions (8 migrations)
+├── supabase/installation_complete.sql  Les 8 migrations en un seul fichier (généré)
+├── supabase/avant_restauration.sql, apres_restauration.sql  Préparation et contrôle d’une restauration
 ├── supabase/seed.sql      Données de démonstration explicitement fictives
 ├── src/
 │   ├── api/               Accès aux données (PostgREST, RPC)

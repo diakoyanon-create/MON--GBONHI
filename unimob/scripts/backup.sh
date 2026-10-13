@@ -2,6 +2,7 @@
 # Sauvegarde logique de la base Supabase (schémas public, private et auth, droits inclus) avec pg_dump.
 # Usage : SUPABASE_DB_URL='postgresql://postgres:MOT_DE_PASSE@db.xxxx.supabase.co:5432/postgres' ./scripts/backup.sh
 # La chaîne de connexion contient un secret : la définir dans le terminal, JAMAIS dans un fichier du dépôt.
+# Restauration : supabase/avant_restauration.sql, pg_restore puis supabase/apres_restauration.sql (docs/SAUVEGARDE.md).
 set -euo pipefail
 : "${SUPABASE_DB_URL:?Définir SUPABASE_DB_URL (voir docs/SAUVEGARDE.md)}"
 OUT_DIR="${BACKUP_DIR:-./sauvegardes}"
@@ -12,10 +13,13 @@ FILE="$OUT_DIR/base-$STAMP.dump"
 pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner \
   --schema=public --schema=private --schema=auth --file="$FILE"
 chmod 600 "$FILE"
-# Vérification minimale : le fichier est lisible par pg_restore et contient les tables métier.
+# Vérification minimale : le fichier est lisible par pg_restore et contient les tables métier,
+# la clé privée, les droits et les vues du site public.
 LISTING="$(pg_restore --list "$FILE")"
 grep -q "TABLE DATA public properties" <<<"$LISTING" \
   && grep -q "TABLE DATA private app_secret" <<<"$LISTING" \
   && grep -q "ACL public FUNCTION promote_to_admin" <<<"$LISTING" \
+  && grep -q "VIEW public public_properties " <<<"$LISTING" \
+  && grep -q "VIEW public public_property_photos " <<<"$LISTING" \
   && echo "Sauvegarde OK : $FILE ($(du -h "$FILE" | cut -f1))" \
   || { echo "ERREUR : sauvegarde incomplète" >&2; exit 1; }
